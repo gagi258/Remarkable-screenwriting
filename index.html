@@ -64,7 +64,12 @@
   .zoomwrap{display:inline-flex;align-items:center;gap:6px}
   #zoomSlider{width:120px}
   #resumeFab{position:fixed;right:16px;bottom:16px;z-index:45;display:none;background:var(--accent);color:#fff;border:0;border-radius:22px;padding:11px 16px;font-weight:600;box-shadow:var(--shadow);cursor:pointer}
-  .cardmenu{position:fixed;z-index:60;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;display:none;min-width:180px}
+  .cardmenu{position:fixed;z-index:60;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;display:none;min-width:190px;max-height:82vh;overflow-y:auto;overflow-x:hidden}
+  .cardmenu .sep{height:1px;background:var(--line);margin:5px 6px}
+  .submenu{position:fixed;display:none;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:5px;min-width:160px;max-height:70vh;overflow:auto;z-index:62}
+  .submenu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer}
+  .submenu button:hover{background:var(--accent-soft)}
+  .submenu.swsub{min-width:0;max-width:200px;white-space:normal}
   .cardmenu.show{display:block}
   .cardmenu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:8px 10px;border-radius:7px;font-size:13px;cursor:pointer}
   .cardmenu button:hover{background:var(--accent-soft)}
@@ -89,7 +94,8 @@
   #zoomPill.show{display:block}
   #quickbar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:36;display:none;align-items:center;gap:6px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 8px}
   #quickbar.show{display:flex}
-  #quickbar input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(40vw,230px)}
+  #quickbar input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(58vw,300px)}
+  #quickbar .qkfields{display:flex;flex-direction:column;gap:6px}
   #quickbar .seg button{padding:7px 9px;font-size:12px}
   /* overlays */
   .scrim{position:fixed;inset:0;background:rgba(20,18,15,.34);z-index:50;display:none}
@@ -207,8 +213,7 @@
 <div id="zoomPill">100%</div>
 <div id="quickbar">
   <div class="seg" id="qkKind"><button data-k="scene" class="on">Scene</button><button data-k="seq">Seq</button></div>
-  <input id="qkInput" placeholder="Scene heading / beat" enterkeyhint="next">
-  <input id="qkSummary" placeholder="Short summary (optional)" enterkeyhint="done">
+  <div class="qkfields"><input id="qkInput" placeholder="Scene heading / beat" enterkeyhint="next"><input id="qkSummary" placeholder="Short summary (optional)" enterkeyhint="done"></div>
   <button id="qkAdd" class="primary">Add</button>
   <button id="qkClose" title="Close quick add">✕</button>
 </div>
@@ -1193,7 +1198,7 @@ $("cheatBtn").onclick=function(){ openModal("cheatModal"); };
 /*CHEAT_START*/
 function runCheatPage(){
   document.title="Scene Studio — Shortcuts";
-  var css="body{margin:0;font:16px/1.6 ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f3ef;color:#2a2722}"
+  var css="html,body{height:auto;overflow-y:auto;overflow-x:hidden}body{margin:0;font:16px/1.6 ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f3ef;color:#2a2722}.cnote{color:#8c8678;font-size:12.5px;margin:8px 0 2px}"
     +".cheatbar{position:sticky;top:0;background:#f4f3ef;padding:16px 18px 8px;border-bottom:1px solid #e7e3db}"
     +"h1{font-size:18px;margin:0}.csub{color:#8c8678;font-size:13px;margin:2px 0 10px}"
     +"#cq{width:100%;font:inherit;font-size:16px;padding:11px 13px;border:1px solid #e7e3db;border-radius:10px;background:#fffdfb}"
@@ -1202,7 +1207,7 @@ function runCheatPage(){
     +"table{width:100%;border-collapse:collapse}td{padding:7px 6px;vertical-align:top;border-bottom:1px solid #efece6;font-size:15px}"
     +"td.k{white-space:nowrap;color:#36332e;font-weight:600;font-family:ui-monospace,Menlo,monospace;width:46%}td.v{color:#3a3733}";
   document.head.insertAdjacentHTML("beforeend","<style>"+css+"</style>");
-  document.body.innerHTML='<div class="cheatbar"><h1>Scene Studio — Shortcuts</h1><div class="csub" id="csub"></div><input id="cq" type="search" placeholder="Search shortcuts…" autocomplete="off"></div><div id="cout"></div>';
+  document.body.innerHTML='<div class="cheatbar"><h1>Scene Studio — Shortcuts</h1><div class="csub" id="csub"></div><input id="cq" type="search" placeholder="Search shortcuts…" autocomplete="off"><div class="cnote">Type the left-hand form on your reMarkable — the editor autocorrects it to the right.</div></div><div id="cout"></div>';
   function esc(x){ return String(x).replace(/[&<>]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[m];}); }
   function mp(o){ var a=[]; Object.keys(o||{}).forEach(function(k){ a.push([k,o[k]]); }); return a; }
   function sect(title,prs,Q){ var r=prs.filter(function(p){ return !Q || (p[0]+" "+p[1]).toLowerCase().indexOf(Q)>=0; }); if(!r.length) return ""; return "<h2>"+esc(title)+"</h2><table>"+r.map(function(p){ return "<tr><td class='k'>"+esc(p[0])+"</td><td class='v'>"+esc(p[1])+"</td></tr>"; }).join("")+"</table>"; }
@@ -1217,7 +1222,6 @@ function runCheatPage(){
     var tm=(BUILTINS.times&&BUILTINS.times[lang])||{};
     var ext=[]; Object.keys(EXTENSIONS).forEach(function(k){ ext.push(["("+k+")","("+EXTENSIONS[k]+")"]); });
     var H="";
-    H+=sect("Board — keys & mouse",bd,Q);
     H+=sect("Scene headings (built in)",pre,Q);
     H+=sect("Time of day (built in)",mp(tm),Q);
     H+=sect("Character extensions (built in)",ext,Q);
@@ -1289,24 +1293,39 @@ function showBoardMenu(x,y,pt){
   item("New sequence here",function(){ var c={id:uid(),kind:"sequence",title:"New sequence",body:"",x:pt.x,y:pt.y,w:230,h:150,color:""}; cards().push(c); touch(); save(); render(); renameSeq(c); });
   item(clipboard.length?("Paste "+clipboard.length+" card"+(clipboard.length>1?"s":"")+" here"):"Paste (nothing copied)",function(){ pasteCards(pt.x,pt.y); },clipboard.length===0);
   item("Select all",function(){ selectAllCards(); });
-  m.style.left=Math.min(x,window.innerWidth-200)+"px"; m.style.top=Math.min(y,window.innerHeight-210)+"px"; m.classList.add("show");
+  placeMenu(m,x,y);
+}
+function placeMenu(m,x,y){ m.style.left="0px"; m.style.top="0px"; m.classList.add("show"); var w=m.offsetWidth||190,h=m.offsetHeight||0; var left=Math.min(x,window.innerWidth-w-8); if(left<8)left=8; var maxh=window.innerHeight*0.82; var top=Math.min(y,window.innerHeight-8-Math.min(h,maxh)); if(top<8)top=8; m.style.left=left+"px"; m.style.top=top+"px"; }
+function subItem(m,label,build){
+  var wrap=document.createElement("div"); wrap.className="hassub";
+  var btn=document.createElement("button"); btn.textContent=label; wrap.appendChild(btn);
+  var sub=document.createElement("div"); sub.className="submenu"; build(sub,function(){ m.classList.remove("show"); }); wrap.appendChild(sub);
+  function pos(){ var r=btn.getBoundingClientRect(); sub.style.display="block"; var sw=sub.offsetWidth||170; var left=r.right+2; if(left+sw>window.innerWidth-6) left=r.left-sw-2; if(left<6)left=6; var sh=Math.min(sub.offsetHeight,window.innerHeight*0.7); var top=Math.min(r.top,window.innerHeight-8-sh); if(top<6)top=6; sub.style.left=left+"px"; sub.style.top=top+"px"; }
+  var t; btn.addEventListener("mouseenter",pos);
+  wrap.addEventListener("mouseenter",function(){ clearTimeout(t); });
+  wrap.addEventListener("mouseleave",function(){ t=setTimeout(function(){ sub.style.display="none"; },200); });
+  btn.addEventListener("click",function(e){ e.stopPropagation(); if(sub.style.display==="block") sub.style.display="none"; else pos(); });
+  m.appendChild(wrap);
 }
 function showCardMenu(x,y,card){
   var m=$("cardMenu"); m.innerHTML="";
   function item(label,fn){ var b=document.createElement("button"); b.textContent=label; b.onclick=function(){ m.classList.remove("show"); fn(); }; m.appendChild(b); }
-  if(card.kind==="sequence"){ item("Rename",function(){ renameSeq(card); }); }
-  else { item("Write / edit",function(){ openWrite([card.id]); }); item("Re-summarize (AI)",function(){ summarizeOne(card); }); }
-  item(card.kind==="sequence"?"Make it a scene":"Make it a sequence",function(){ card.kind=card.kind==="sequence"?"scene":"sequence"; touch(); save(); render(); });
-  Object.keys(state.projects).forEach(function(pid){ if(pid===state.activeId) return; item("Move to: "+(state.projects[pid].name||"Untitled"),function(){ if(!selected.has(card.id)) selected=new Set([card.id]); moveSelectedTo(pid); }); });
-  var row=document.createElement("div"); row.className="swrow";
-  PALETTE.forEach(function(p){ var b=document.createElement("button"); b.className="sw"; b.title=p[0]; b.style.background=p[1]||"#fff"; if(!p[1]) b.style.border="1px dashed #bbb"; b.onclick=function(){ card.color=p[1]; touch(); save(); render(); m.classList.remove("show"); }; row.appendChild(b); });
-  m.appendChild(row);
-  item("Duplicate",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); duplicateSelected(); });
+  function sep(){ var d=document.createElement("div"); d.className="sep"; m.appendChild(d); }
   item("Copy",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); copySelected(); });
   item("Cut",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); copySelected(); deleteSelected(); });
+  item("Duplicate",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); duplicateSelected(); });
+  item(clipboard.length?("Paste "+clipboard.length):"Paste",function(){ pasteCards((card.x||40)+28,(card.y||40)+28); });
+  sep();
+  if(card.kind==="sequence"){ item("Rename",function(){ renameSeq(card); }); }
+  else { item("Write / edit",function(){ openWrite([card.id]); }); item("Re-summarize (AI)",function(){ summarizeOne(card); }); }
+  subItem(m,"Colour ▸",function(sub,close){ sub.className="submenu swsub"; PALETTE.forEach(function(p){ var b=document.createElement("button"); b.className="sw"; b.title=p[0]; b.style.background=p[1]||"#fff"; if(!p[1]) b.style.border="1px dashed #bbb"; b.onclick=function(){ if(!selected.has(card.id)) selected=new Set([card.id]); setColorSelected(p[1]); close(); }; sub.appendChild(b); }); });
+  subItem(m,"Move to ▸",function(sub,close){ var any=false; Object.keys(state.projects).forEach(function(pid){ if(pid===state.activeId) return; any=true; var b=document.createElement("button"); b.textContent=state.projects[pid].name||"Untitled"; b.onclick=function(){ if(!selected.has(card.id)) selected=new Set([card.id]); moveSelectedTo(pid); close(); }; sub.appendChild(b); }); if(!any){ var nb=document.createElement("button"); nb.textContent="No other scripts"; nb.disabled=true; sub.appendChild(nb); } });
+  item(card.kind==="sequence"?"Make it a scene":"Make it a sequence",function(){ card.kind=card.kind==="sequence"?"scene":"sequence"; touch(); save(); render(); });
+  sep();
   item("Delete",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); deleteSelected(); });
-  m.style.left=Math.min(x,window.innerWidth-200)+"px"; m.style.top=Math.min(y,window.innerHeight-240)+"px"; m.classList.add("show");
+  placeMenu(m,x,y);
 }
+
 canvas.addEventListener("contextmenu",function(e){ var el=e.target.closest(".card"); if(el){ e.preventDefault(); var c=cardById(el.dataset.id); if(!c) return; if(!selected.has(c.id)){ selected=new Set([c.id]); render(); } showCardMenu(e.clientX,e.clientY,c); } else { e.preventDefault(); showBoardMenu(e.clientX,e.clientY,clientToLogical(e.clientX,e.clientY)); } });
 document.addEventListener("click",function(e){ if(!e.target.closest(".cardmenu")) $("cardMenu").classList.remove("show"); });
 
