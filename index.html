@@ -37,7 +37,9 @@
   .filebtn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
   .hint{position:fixed;left:0;right:0;text-align:center;font-size:12.5px;color:var(--muted);padding:6px;pointer-events:none;z-index:30}
   #board{position:absolute;inset:54px 0 0 0;overflow:auto;background:radial-gradient(circle at 1px 1px,#dcd8cf 1px,transparent 0);background-size:26px 26px}
-  #canvas{position:relative;width:4000px;height:3000px}
+  #sizer{position:relative;width:4000px;height:3000px}
+  #canvas{position:absolute;top:0;left:0;width:4000px;height:3000px;transform-origin:0 0}
+  #canvas.zooming{will-change:transform}
   .card{position:absolute;width:230px;min-height:130px;background:var(--panel);border:1px solid var(--line);
     border-left:4px solid var(--accent);border-radius:10px;box-shadow:var(--shadow);padding:10px 12px 12px;
     cursor:grab;user-select:none;display:flex;flex-direction:column;gap:6px}
@@ -58,6 +60,12 @@
   .emptyMsg{position:absolute;top:46%;left:0;right:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
   .emptyMsg b{color:var(--ink)}
   #marquee{position:absolute;border:1px solid var(--sel);background:rgba(46,109,246,.08);display:none;z-index:5}
+  #zoomPill{position:fixed;left:14px;bottom:14px;z-index:35;background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:12.5px;box-shadow:var(--shadow);cursor:pointer;display:none}
+  #zoomPill.show{display:block}
+  #quickbar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:36;display:none;align-items:center;gap:6px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 8px}
+  #quickbar.show{display:flex}
+  #quickbar input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(54vw,320px)}
+  #quickbar .seg button{padding:7px 9px;font-size:12px}
   /* overlays */
   .scrim{position:fixed;inset:0;background:rgba(20,18,15,.34);z-index:50;display:none}
   .scrim.show{display:block}
@@ -148,6 +156,7 @@
   <select id="projSel" title="Switch script"></select>
   <button id="addScene">+ Scene</button>
   <button id="addSeq">+ Sequence</button>
+  <button id="quickToggle" title="Rapidly add cards at the bottom of the board">Quick add</button>
   <button id="writeTogether" disabled title="Select 2+ cards, then write them as one sequence">Write together</button>
   <span class="spacer"></span>
   <button id="compileBtn" class="primary">Compile ▸</button>
@@ -157,10 +166,16 @@
 </div>
 <div class="hint" id="hint">Add a card, double-click it to write the scene. Shift-click to pick a cluster.</div>
 
-<div id="board"><div id="canvas">
+<div id="board"><div id="sizer"><div id="canvas">
   <div id="marquee"></div>
   <div class="emptyMsg" id="emptyMsg">This script is empty.<br>Click <b>+ Scene</b> to start — or <b>⋯ → Import .fountain</b> to turn a script into cards.</div>
-</div></div>
+</div></div></div>
+<div id="zoomPill">100%</div>
+<div id="quickbar">
+  <div class="seg" id="qkKind"><button data-k="scene" class="on">Scene</button><button data-k="seq">Seq</button></div>
+  <input id="qkInput" placeholder="Add a card… then Enter" enterkeyhint="done">
+  <button id="qkClose" title="Close quick add">✕</button>
+</div>
 
 <!-- WRITE PANEL -->
 <div class="scrim" id="scrim"></div>
@@ -244,6 +259,16 @@ Your name & location shortcuts expand as you type; press Tidy to clean a pasted 
     </div>
     <p id="dbxStatus" style="margin-top:8px">Not connected.</p>
 
+    <h3>AI scene summaries (online)</h3>
+    <p>Paste your Anthropic API key to summarise written scenes onto the cards (makes rearranging easier). Stored only on this device, never synced. Your scene text is sent to Anthropic to generate each summary.</p>
+    <div class="row">
+      <input type="password" id="aiKey" placeholder="Anthropic API key (sk-ant-...)" autocomplete="off" spellcheck="false" style="flex:1 1 220px">
+      <button id="aiSave">Save key</button>
+      <button id="aiRun" class="primary">Summarize written scenes</button>
+    </div>
+    <label style="font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;margin-top:8px"><input type="checkbox" id="aiAuto"> Summarise automatically after importing a script</label>
+    <p id="aiStatus" style="margin-top:6px"></p>
+
     <h3>Built-in shortcuts (every script)</h3>
     <div id="builtinsView"></div>
 
@@ -300,6 +325,7 @@ Your name & location shortcuts expand as you type; press Tidy to clean a pasted 
     <h3>Import / export / backup</h3>
     <div class="row">
       <span class="filebtn"><button>Import .fountain →cards</button><input type="file" id="importFile" accept=".fountain,.txt,.md,.spmd,text/plain"></span>
+      <span class="filebtn"><button>Import Scene Board export</button><input type="file" id="importBoardFile" accept=".json,application/json"></span>
       <button id="saveStudio">Save backup (.json)</button>
       <span class="filebtn"><button>Open backup…</button><input type="file" id="openStudio" accept=".json,application/json"></span>
       <button id="clearBoard" class="warnbtn">Clear this board…</button>
@@ -786,7 +812,7 @@ function render(){
     el.className="card"+(c.kind==="sequence"?" seq":"")+(selected.has(c.id)?" sel":"");
     el.style.left=(c.x||40)+"px"; el.style.top=(c.y||40)+"px"; if(c.color) el.style.borderLeftColor=c.color; el.dataset.id=c.id;
     var written=c.kind==="scene" && String(c.body||"").trim().length>0;
-    var snip=c.kind==="sequence"?"":(written?escapeHtml(String(c.body).replace(/\n+/g," ").slice(0,160)):"<i>not written yet</i>");
+    var snip=c.kind==="sequence"?"":(c.synopsis?escapeHtml(String(c.synopsis).slice(0,200)):(written?escapeHtml(String(c.body).replace(/\n+/g," ").slice(0,160)):"<i>not written yet</i>"));
     el.innerHTML='<div class="top"><span class="tag">'+(c.kind==="sequence"?"SEQ":"SCENE")+'</span><span class="ord">#'+(ord[c.id]||"")+'</span></div>'+
       '<div class="ttl"></div>'+(c.kind==="sequence"?"":'<div class="snip">'+snip+'</div>')+
       '<div class="foot">'+(c.kind==="sequence"?"":'<span class="dot'+(written?" on":"")+'"></span><span class="wlabel">'+(written?"written":"empty")+'</span>')+
@@ -797,10 +823,18 @@ function render(){
   $("writeTogether").disabled=countSelected()<2;
 }
 
-function placeNew(){ var n=cards().length; return {x:Math.round(board.scrollLeft+120+((n*28)%420)), y:Math.round(board.scrollTop+90+((n*22)%300))}; }
+var zoom=1, minZoom=0.3, maxZoom=2.5;
+function placeNew(){
+  var cs=cards(); if(!cs.length) return {x:60,y:60};
+  var bottom=Math.max.apply(null,cs.map(function(c){return (c.y||0)+(c.h||150);}));
+  var band=cs.filter(function(c){ return (c.y||0)+(c.h||150) > bottom-40; });
+  if(band.length>0 && band.length<6){ var maxX=Math.max.apply(null,band.map(function(c){return c.x||0;})); return {x:maxX+250, y:band[0].y}; }
+  return {x:60, y:bottom+30};
+}
+function scrollToCard(c){ try{ board.scrollLeft=Math.max(0,c.x*zoom-board.clientWidth/2+120); board.scrollTop=Math.max(0,c.y*zoom-board.clientHeight/2+90); }catch(e){} }
 function addCard(kind){
-  var p=placeNew(); var c={id:uid(),kind:kind,title:kind==="sequence"?"New sequence":"New scene",body:"",x:p.x,y:p.y,w:230,h:150,color:""};
-  cards().push(c); touch(); save(); render();
+  var p=placeNew(); var c={id:uid(),kind:kind,title:kind==="sequence"?"New sequence":"New scene",body:"",synopsis:"",x:p.x,y:p.y,w:230,h:150,color:""};
+  cards().push(c); touch(); save(); render(); scrollToCard(c);
   if(kind==="scene") openWrite([c.id]); else renameSeq(c);
 }
 $("addScene").onclick=function(){ addCard("scene"); };
@@ -810,6 +844,7 @@ function renameSeq(c){ var name=prompt("Sequence name:",c.title==="New sequence"
 // drag + select + marquee
 var drag=null, marq=null;
 board.addEventListener("pointerdown",function(e){
+  if(gesturing) return;
   var cardEl=e.target.closest(".card"); if(e.target.closest(".writebtn")) return;
   if(cardEl){
     var id=cardEl.dataset.id;
@@ -819,14 +854,15 @@ board.addEventListener("pointerdown",function(e){
     cardEl.setPointerCapture&&cardEl.setPointerCapture(e.pointerId);
   } else {
     if(!e.shiftKey){ selected.clear(); render(); }
-    var r=board.getBoundingClientRect(); marq={x0:e.clientX-r.left+board.scrollLeft,y0:e.clientY-r.top+board.scrollTop};
+    var r=board.getBoundingClientRect(); marq={x0:(e.clientX-r.left+board.scrollLeft)/zoom,y0:(e.clientY-r.top+board.scrollTop)/zoom};
     var m=$("marquee"); m.style.display="block"; m.style.left=marq.x0+"px"; m.style.top=marq.y0+"px"; m.style.width="0"; m.style.height="0";
   }
 });
 board.addEventListener("pointermove",function(e){
-  if(drag){ var dx=e.clientX-drag.startX, dy=e.clientY-drag.startY; if(Math.abs(dx)+Math.abs(dy)>3) drag.moved=true;
+  if(gesturing){ drag=null; if(marq){ marq=null; $("marquee").style.display="none"; } return; }
+  if(drag){ var dx=(e.clientX-drag.startX)/zoom, dy=(e.clientY-drag.startY)/zoom; if(Math.abs(dx)+Math.abs(dy)>2) drag.moved=true;
     drag.origs.forEach(function(o){ var c=cardById(o.id); if(c){ c.x=Math.max(0,o.x+dx); c.y=Math.max(0,o.y+dy); }}); positionCards();
-  } else if(marq){ var r=board.getBoundingClientRect(); var x=e.clientX-r.left+board.scrollLeft, y=e.clientY-r.top+board.scrollTop;
+  } else if(marq){ var r=board.getBoundingClientRect(); var x=(e.clientX-r.left+board.scrollLeft)/zoom, y=(e.clientY-r.top+board.scrollTop)/zoom;
     var m=$("marquee"); m.style.left=Math.min(x,marq.x0)+"px"; m.style.top=Math.min(y,marq.y0)+"px"; m.style.width=Math.abs(x-marq.x0)+"px"; m.style.height=Math.abs(y-marq.y0)+"px"; }
 });
 board.addEventListener("pointerup",function(e){
@@ -840,6 +876,47 @@ function positionCards(){ Array.prototype.slice.call(canvas.querySelectorAll(".c
 canvas.addEventListener("click",function(e){ var btn=e.target.closest(".writebtn"); if(!btn) return; var c=cardById(e.target.closest(".card").dataset.id); if(!c) return; if(c.kind==="sequence") renameSeq(c); else openWrite([c.id]); });
 canvas.addEventListener("dblclick",function(e){ var cardEl=e.target.closest(".card"); if(!cardEl) return; var c=cardById(cardEl.dataset.id); if(!c) return; if(c.kind==="sequence") renameSeq(c); else openWrite([c.id]); });
 
+// ---------- zoom (pinch / trackpad) ----------
+var gesturing=false, hasGesture=("ongesturestart" in window);
+var sizerEl=$("sizer");
+function applyZoom(){
+  canvas.style.transform="scale("+zoom+")";
+  sizerEl.style.width=(4000*zoom)+"px"; sizerEl.style.height=(3000*zoom)+"px";
+  var pill=$("zoomPill"); pill.textContent=Math.round(zoom*100)+"%"; pill.classList.toggle("show",Math.abs(zoom-1)>0.005);
+}
+function setZoom(nz,fx,fy){
+  nz=Math.max(minZoom,Math.min(maxZoom,nz)); if(Math.abs(nz-zoom)<0.0005) return;
+  var r=board.getBoundingClientRect(); if(fx==null){ fx=r.width/2; fy=r.height/2; }
+  var lx=(board.scrollLeft+fx)/zoom, ly=(board.scrollTop+fy)/zoom;
+  zoom=nz; applyZoom();
+  board.scrollLeft=Math.max(0,lx*zoom-fx); board.scrollTop=Math.max(0,ly*zoom-fy);
+}
+$("zoomPill").onclick=function(){ setZoom(1); };
+board.addEventListener("wheel",function(e){ if(!e.ctrlKey) return; e.preventDefault(); var r=board.getBoundingClientRect(); setZoom(zoom*Math.exp(-e.deltaY*0.01), e.clientX-r.left, e.clientY-r.top); },{passive:false});
+if(hasGesture){
+  var gStart=1;
+  board.addEventListener("gesturestart",function(e){ e.preventDefault(); gesturing=true; gStart=zoom; canvas.classList.add("zooming"); },{passive:false});
+  board.addEventListener("gesturechange",function(e){ e.preventDefault(); var r=board.getBoundingClientRect(); setZoom(gStart*e.scale, e.clientX-r.left, e.clientY-r.top); },{passive:false});
+  board.addEventListener("gestureend",function(){ canvas.classList.remove("zooming"); setTimeout(function(){gesturing=false;},80); },{passive:false});
+}
+var pinchD=0, pinchZ=1;
+function touchDist(t){ var a=t[0],b=t[1]; return Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); }
+board.addEventListener("touchstart",function(e){ if(e.touches.length>=2){ gesturing=true; drag=null; marq=null; $("marquee").style.display="none"; if(!hasGesture){ pinchD=touchDist(e.touches); pinchZ=zoom; canvas.classList.add("zooming"); } } },{passive:true});
+board.addEventListener("touchmove",function(e){ if(!hasGesture && e.touches.length===2 && pinchD){ e.preventDefault(); var r=board.getBoundingClientRect(); var mx=(e.touches[0].clientX+e.touches[1].clientX)/2-r.left, my=(e.touches[0].clientY+e.touches[1].clientY)/2-r.top; setZoom(pinchZ*touchDist(e.touches)/pinchD, mx, my); } },{passive:false});
+board.addEventListener("touchend",function(e){ if(e.touches.length<2){ pinchD=0; canvas.classList.remove("zooming"); setTimeout(function(){gesturing=false;},80); } },{passive:true});
+applyZoom();
+
+// ---------- quick add bar ----------
+var qkKind="scene";
+$("quickToggle").onclick=function(){ var q=$("quickbar"); var show=!q.classList.contains("show"); q.classList.toggle("show",show); if(show) setTimeout(function(){$("qkInput").focus();},20); };
+$("qkClose").onclick=function(){ $("quickbar").classList.remove("show"); };
+Array.prototype.slice.call($("qkKind").children).forEach(function(b){ b.onclick=function(){ qkKind=b.dataset.k==="seq"?"sequence":"scene"; Array.prototype.slice.call($("qkKind").children).forEach(function(x){x.classList.toggle("on",x===b);}); $("qkInput").focus(); }; });
+$("qkInput").addEventListener("keydown",function(e){ if(e.key!=="Enter") return; e.preventDefault();
+  var v=$("qkInput").value.trim(); if(!v) return;
+  var p=placeNew(); var c={id:uid(),kind:qkKind,title:v,body:"",synopsis:"",x:p.x,y:p.y,w:230,h:150,color:""};
+  cards().push(c); touch(); save(); render(); scrollToCard(c); $("qkInput").value="";
+});
+
 // ---------- WRITE ----------
 var writing=null; var wta=$("wta");
 function openWrite(ids){
@@ -848,7 +925,7 @@ function openWrite(ids){
   if(writing.cluster){ note.style.display="block"; note.textContent="Cluster of "+ids.length+" cards. Write them as one flowing sequence — keep a slug line (INT./EXT.…) at the start of each scene. On Done, they split back into their cards in order.";
     $("writeTitle").textContent="Writing "+ids.length+" cards together";
     wta.value=ids.map(function(id){var c=cardById(id);return String(c.body||"").trim()||(SK.isSceneLine(c.title||"")?c.title:("."+(c.title||"UNTITLED")));}).join("\n\n");
-  } else { note.style.display="none"; var c=cardById(ids[0]); $("writeTitle").textContent=c.title||"Scene"; wta.value=c.body||""; }
+  } else { var c=cardById(ids[0]); $("writeTitle").textContent=c.title||"Scene"; wta.value=c.body||""; if(c.synopsis && !String(c.body||"").trim()){ note.style.display="block"; note.textContent="From your board: "+c.synopsis; } else { note.style.display="none"; } }
   setLang(active().lang||state.defaultLang);
   $("scrim").classList.add("show"); $("write").classList.add("show"); applyWriteMode(); setTimeout(function(){ wta.focus(); },30);
 }
@@ -962,13 +1039,42 @@ $("importFile").onchange=function(e){ var file=e.target.files[0]; if(!file) retu
   r.onload=function(){ var nodes=SK.textToCards(String(r.result)); if(!nodes.length){ alert("No scenes found in that file."); return; }
     var sx=board.scrollLeft+80, sy=board.scrollTop+70, col=0, row=0;
     nodes.forEach(function(n){ cards().push({id:uid(),kind:n.kind,title:n.title,body:n.body||"",x:sx+col*262,y:sy+row*186,w:230,h:150,color:""}); col++; if(col>=5){col=0;row++;} });
+    touch(); save(); render(); closeAllModals(); maybeAutoSummarize();
+  }; r.readAsText(file); e.target.value=""; };
+
+// ---------- import cards from the old Scene Board export ----------
+function ssDetectCards(json){
+  var found=[];
+  function isCard(o){ return o&&typeof o==="object"&&!Array.isArray(o)&&typeof o.x==="number"&&typeof o.y==="number"; }
+  function walk(o){ if(!o||typeof o!=="object") return; if(Array.isArray(o)){ if(o.length&&o.some(isCard)) found.push(o); return; } Object.keys(o).forEach(function(k){ walk(o[k]); }); }
+  walk(json); return found;
+}
+function ssPickKey(card,cands){ for(var i=0;i<cands.length;i++) if(typeof card[cands[i]]==="string") return cands[i]; return null; }
+$("importBoardFile").onchange=function(e){ var file=e.target.files[0]; if(!file) return; var r=new FileReader();
+  r.onload=function(){
+    var json; try{ json=JSON.parse(String(r.result)); }catch(err){ alert("That isn't a Scene Board export (couldn't read it). Use the board's Export button."); return; }
+    var arrs=ssDetectCards(json); if(!arrs.length){ alert("No cards found in that file. In Scene Board use Export (or Projects \u25be \u2192 Export all)."); return; }
+    var arr=arrs.sort(function(a,b){return b.length-a.length;})[0];
+    var f0=arr[0]||{}; var tk=ssPickKey(f0,["title","name","heading","label","text"]); var dk=ssPickKey(f0,["description","desc","synopsis","summary","body","note"]);
+    if(dk===tk) dk=ssPickKey(f0,["description","desc","synopsis","summary"]);
+    var minX=Infinity,minY=Infinity; arr.forEach(function(c){ if(typeof c.x==="number")minX=Math.min(minX,c.x); if(typeof c.y==="number")minY=Math.min(minY,c.y); });
+    if(!isFinite(minX))minX=0; if(!isFinite(minY))minY=0;
+    var ox=board.scrollLeft+60-minX, oy=board.scrollTop+60-minY, added=0;
+    arr.forEach(function(c){
+      var ty=String(c.type||c.kind||"").toLowerCase(); var kind=ty.indexOf("seq")>=0?"sequence":"scene";
+      var title=(tk&&c[tk])?String(c[tk]):(kind==="sequence"?"Sequence":"Untitled scene");
+      var syn=(dk&&c[dk])?String(c[dk]):"";
+      cards().push({id:uid(),kind:kind,title:title,body:"",synopsis:kind==="scene"?syn:"",x:Math.round((c.x||0)+ox),y:Math.round((c.y||0)+oy),w:230,h:150,color:""});
+      added++;
+    });
     touch(); save(); render(); closeAllModals();
+    alert("Imported "+added+" cards from Scene Board, arrangement kept. Open each to write the scene \u2014 the board's description shows as a reminder.");
   }; r.readAsText(file); e.target.value=""; };
 
 // ---------- SETTINGS (shortcuts + dropbox) ----------
 $("settingsBtn").onclick=function(){ var s=active().shortcuts;
   $("scChar").value=s.characters||""; $("scLoc").value=s.locations||""; $("scPre").value=s.prefixes||""; $("scTime").value=s.times||"";
-  renderBuiltins(); $("dbxKey").value=(dbx.appKey||""); setDbxStatus(dbx.refreshToken?"Connected.":"Not connected."); openModal("settingsModal"); };
+  renderBuiltins(); $("dbxKey").value=(dbx.appKey||""); setDbxStatus(dbx.refreshToken?"Connected.":"Not connected."); $("aiKey").value=aiKey; $("aiAuto").checked=aiAuto; setAiStatus(""); openModal("settingsModal"); };
 function renderBuiltins(){ var lang=active().lang||state.defaultLang, t=BUILTINS.times[lang]||{};
   var lines=["Scene prefixes:  i. → INT.   e. → EXT.   i/e → INT./EXT."];
   lines.push("Time ("+(LANGS[lang]||lang)+"):  "+Object.keys(t).map(function(k){return k+" → "+t[k];}).join("   "));
@@ -981,6 +1087,41 @@ $("scImport").onchange=function(e){ var f=e.target.files[0]; if(!f) return; var 
 $("scExport").onclick=function(){ var s=active().shortcuts, blob="";
   if(s.characters) blob+="[characters]\n"+s.characters+"\n\n"; if(s.times) blob+="[times]\n"+s.times+"\n\n";
   if(s.locations) blob+="[locations]\n"+s.locations+"\n\n"; if(s.prefixes) blob+="[prefixes]\n"+s.prefixes+"\n"; dl(baseName()+"-shortcuts.txt", blob.trim()+"\n"); };
+
+// ---------- AI scene summaries (Anthropic, browser-direct) ----------
+var aiKey=""; try{ aiKey=localStorage.getItem("scene-studio-anthropic-key")||""; }catch(e){}
+var aiAuto=false; try{ aiAuto=localStorage.getItem("scene-studio-ai-auto")==="1"; }catch(e){}
+function setAiStatus(t){ var el=$("aiStatus"); if(el) el.textContent=t||""; }
+var _hintDefault=null;
+function setBusy(msg){ var h=$("hint"); if(_hintDefault===null) _hintDefault=h.textContent; h.textContent=msg||_hintDefault; }
+function summarizeScene(text){
+  return fetch("https://api.anthropic.com/v1/messages",{ method:"POST",
+    headers:{"content-type":"application/json","x-api-key":aiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify({ model:"claude-haiku-4-5-20251001", max_tokens:160,
+      system:"You write terse index-card summaries of screenplay scenes. Given one scene in Fountain format, reply with 1-3 short sentences (max ~40 words) capturing what happens, who is present, and the dramatic turn. Write in the same language as the scene. No preamble, no labels, no quotation marks - just the summary.",
+      messages:[{role:"user",content:String(text).slice(0,6000)}] }) })
+  .then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error(r.status+" "+t.slice(0,140)); return JSON.parse(t); }); })
+  .then(function(d){ var c=(d.content||[]).filter(function(x){return x.type==="text";})[0]; return c?String(c.text).trim():""; });
+}
+function summarizeAll(force){
+  if(!aiKey){ setAiStatus("Add your Anthropic API key first."); return; }
+  var todo=cards().filter(function(c){ return c.kind==="scene" && String(c.body||"").trim() && (force || !String(c.synopsis||"").trim()); });
+  if(!todo.length){ setBusy(""); setAiStatus("No written scenes need summarising."); return; }
+  var done=0, fail=0, idx=0, running=0, total=todo.length, finished=false, lastErr="";
+  setAiStatus("Summarising "+total+" scenes..."); setBusy("Summarising scenes... 0/"+total);
+  function step(){
+    if(idx>=todo.length){ if(running===0&&!finished){ finished=true; setBusy(""); save(); render(); setAiStatus("Done - summarised "+done+(fail?(", "+fail+" failed ("+lastErr+")"):"")+"."); } return; }
+    var card=todo[idx++]; running++;
+    summarizeScene(card.body).then(function(t){ if(t){ card.synopsis=t; done++; } })
+      .catch(function(e){ fail++; lastErr=(e&&e.message)||"error"; })
+      .then(function(){ running--; setBusy("Summarising scenes... "+(done+fail)+"/"+total); if((done+fail)%4===0) render(); step(); });
+  }
+  for(var i=0;i<Math.min(4,total);i++) step();
+}
+function maybeAutoSummarize(){ if(aiAuto && aiKey) setTimeout(function(){ summarizeAll(false); },200); }
+$("aiSave").onclick=function(){ aiKey=$("aiKey").value.trim(); try{ localStorage.setItem("scene-studio-anthropic-key",aiKey); }catch(e){} setAiStatus(aiKey?"Key saved on this device.":"Key cleared."); };
+$("aiAuto").onchange=function(){ aiAuto=$("aiAuto").checked; try{ localStorage.setItem("scene-studio-ai-auto",aiAuto?"1":"0"); }catch(e){} };
+$("aiRun").onclick=function(){ var k=$("aiKey").value.trim(); if(k&&k!==aiKey){ aiKey=k; try{ localStorage.setItem("scene-studio-anthropic-key",aiKey); }catch(e){} } summarizeAll(false); };
 
 // ---------- CHEAT ----------
 $("cheatBtn").onclick=function(){ openModal("cheatModal"); };
