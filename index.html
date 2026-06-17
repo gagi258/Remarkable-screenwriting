@@ -57,6 +57,11 @@
   .dot.on{background:var(--written)}
   .card .wlabel{font-size:10.5px;color:var(--muted)}
   .card .writebtn{margin-left:auto;font-size:11px;padding:3px 9px;border-radius:6px}
+  .card .rz{position:absolute;right:2px;bottom:2px;width:16px;height:16px;cursor:nwse-resize;opacity:.4;background:linear-gradient(135deg,transparent 0 46%,var(--muted) 46% 54%,transparent 54% 70%,var(--muted) 70% 80%,transparent 80%)}
+  .card .rz:hover{opacity:.85}
+  .card.seq .rz{display:none}
+  .zoomwrap{display:inline-flex;align-items:center;gap:6px}
+  #zoomSlider{width:120px}
   .emptyMsg{position:absolute;top:46%;left:0;right:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
   .emptyMsg b{color:var(--ink)}
   #marquee{position:absolute;border:1px solid var(--sel);background:rgba(46,109,246,.08);display:none;z-index:5}
@@ -154,11 +159,14 @@
 
 <div class="bar">
   <select id="projSel" title="Switch script"></select>
+  <button id="newProjTop" title="New script">＋ New</button>
   <button id="addScene">+ Scene</button>
   <button id="addSeq">+ Sequence</button>
   <button id="quickToggle" title="Rapidly add cards at the bottom of the board">Quick add</button>
+  <div class="pickwrap"><button id="moveBtn" disabled title="Move selected cards to another script">Move ▾</button><div class="pickmenu" id="moveMenu"></div></div>
   <button id="writeTogether" disabled title="Select 2+ cards, then write them as one sequence">Write together</button>
   <span class="spacer"></span>
+  <span class="zoomwrap"><input type="range" id="zoomSlider" min="30" max="250" value="100" title="Zoom board"></span>
   <button id="compileBtn" class="primary">Compile ▸</button>
   <button id="settingsBtn" title="Shortcuts & Dropbox sync">⚙</button>
   <button id="cheatBtn" title="Fountain cheat sheet">?</button>
@@ -802,6 +810,8 @@ function cardById(id){ return cards().filter(function(c){return c.id===id;})[0];
 function orderIndex(){ var ord=SK.readingOrder(cards()), map={}; ord.forEach(function(c,i){ map[c.id]=i+1; }); return map; }
 function escapeHtml(s){ return s.replace(/[&<>]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[m];}); }
 function countSelected(){ var n=0; selected.forEach(function(id){ if(cardById(id)) n++; }); return n; }
+function computeUiScale(){ var w=window.innerWidth||1200; return Math.max(0.85,Math.min(1.18,w/1180)); }
+var uiScale=computeUiScale();
 
 function render(){
   $("emptyMsg").style.display=cards().length?"none":"block";
@@ -810,17 +820,17 @@ function render(){
   cards().forEach(function(c){
     var el=document.createElement("div");
     el.className="card"+(c.kind==="sequence"?" seq":"")+(selected.has(c.id)?" sel":"");
-    el.style.left=(c.x||40)+"px"; el.style.top=(c.y||40)+"px"; if(c.color) el.style.borderLeftColor=c.color; el.dataset.id=c.id;
+    el.style.left=(c.x||40)+"px"; el.style.top=(c.y||40)+"px"; el.style.width=Math.round((c.w||230)*uiScale)+"px"; el.style.minHeight=Math.round((c.h||150)*uiScale)+"px"; if(c.color) el.style.borderLeftColor=c.color; el.dataset.id=c.id;
     var written=c.kind==="scene" && String(c.body||"").trim().length>0;
     var snip=c.kind==="sequence"?"":(c.synopsis?escapeHtml(String(c.synopsis).slice(0,200)):(written?escapeHtml(String(c.body).replace(/\n+/g," ").slice(0,160)):"<i>not written yet</i>"));
     el.innerHTML='<div class="top"><span class="tag">'+(c.kind==="sequence"?"SEQ":"SCENE")+'</span><span class="ord">#'+(ord[c.id]||"")+'</span></div>'+
       '<div class="ttl"></div>'+(c.kind==="sequence"?"":'<div class="snip">'+snip+'</div>')+
       '<div class="foot">'+(c.kind==="sequence"?"":'<span class="dot'+(written?" on":"")+'"></span><span class="wlabel">'+(written?"written":"empty")+'</span>')+
-      '<button class="writebtn">'+(c.kind==="sequence"?"Rename":"Write ✎")+'</button></div>';
+      '<button class="writebtn">'+(c.kind==="sequence"?"Rename":"Write ✎")+'</button></div>'+(c.kind==="sequence"?"":'<div class="rz"></div>');
     el.querySelector(".ttl").textContent=c.title||(c.kind==="sequence"?"New sequence":"New scene");
     canvas.appendChild(el);
   });
-  $("writeTogether").disabled=countSelected()<2;
+  $("writeTogether").disabled=countSelected()<2; $("moveBtn").disabled=countSelected()<1;
 }
 
 var zoom=1, minZoom=0.3, maxZoom=2.5;
@@ -842,10 +852,12 @@ $("addSeq").onclick=function(){ addCard("sequence"); };
 function renameSeq(c){ var name=prompt("Sequence name:",c.title==="New sequence"?"":c.title); if(name!==null){ c.title=name.trim()||"Sequence"; touch(); save(); render(); } }
 
 // drag + select + marquee
-var drag=null, marq=null;
+var drag=null, marq=null, rzdrag=null;
 board.addEventListener("pointerdown",function(e){
   if(gesturing) return;
   var cardEl=e.target.closest(".card"); if(e.target.closest(".writebtn")) return;
+  var rzEl=e.target.closest(".rz");
+  if(rzEl && cardEl){ var rc=cardById(cardEl.dataset.id); if(rc){ rzdrag={id:rc.id,x:e.clientX,y:e.clientY,w0:rc.w||230,h0:rc.h||150,el:cardEl}; cardEl.setPointerCapture&&cardEl.setPointerCapture(e.pointerId); e.preventDefault(); return; } }
   if(cardEl){
     var id=cardEl.dataset.id;
     if(e.shiftKey){ if(selected.has(id))selected.delete(id); else selected.add(id); render(); return; }
@@ -860,16 +872,18 @@ board.addEventListener("pointerdown",function(e){
 });
 board.addEventListener("pointermove",function(e){
   if(gesturing){ drag=null; if(marq){ marq=null; $("marquee").style.display="none"; } return; }
+  if(rzdrag){ var rzc=cardById(rzdrag.id); if(rzc){ rzc.w=Math.max(150,Math.round(rzdrag.w0+(e.clientX-rzdrag.x)/(zoom*uiScale))); rzc.h=Math.max(96,Math.round(rzdrag.h0+(e.clientY-rzdrag.y)/(zoom*uiScale))); rzdrag.el.style.width=Math.round(rzc.w*uiScale)+"px"; rzdrag.el.style.minHeight=Math.round(rzc.h*uiScale)+"px"; } return; }
   if(drag){ var dx=(e.clientX-drag.startX)/zoom, dy=(e.clientY-drag.startY)/zoom; if(Math.abs(dx)+Math.abs(dy)>2) drag.moved=true;
     drag.origs.forEach(function(o){ var c=cardById(o.id); if(c){ c.x=Math.max(0,o.x+dx); c.y=Math.max(0,o.y+dy); }}); positionCards();
   } else if(marq){ var r=board.getBoundingClientRect(); var x=(e.clientX-r.left+board.scrollLeft)/zoom, y=(e.clientY-r.top+board.scrollTop)/zoom;
     var m=$("marquee"); m.style.left=Math.min(x,marq.x0)+"px"; m.style.top=Math.min(y,marq.y0)+"px"; m.style.width=Math.abs(x-marq.x0)+"px"; m.style.height=Math.abs(y-marq.y0)+"px"; }
 });
 board.addEventListener("pointerup",function(e){
+  if(rzdrag){ rzdrag=null; touch(); save(); render(); return; }
   if(drag){ if(drag.moved){ touch(); save(); render(); } drag=null; }
   else if(marq){ var m=$("marquee"), mr={l:parseFloat(m.style.left),t:parseFloat(m.style.top),w:parseFloat(m.style.width),h:parseFloat(m.style.height)};
     if(mr.w>6&&mr.h>6){ if(!e.shiftKey) selected.clear();
-      cards().forEach(function(c){ var cw=c.w||230,ch=c.h||150; if(c.x<mr.l+mr.w&&c.x+cw>mr.l&&c.y<mr.t+mr.h&&c.y+ch>mr.t) selected.add(c.id); }); }
+      cards().forEach(function(c){ var cw=(c.w||230)*uiScale,ch=(c.h||150)*uiScale; if(c.x<mr.l+mr.w&&c.x+cw>mr.l&&c.y<mr.t+mr.h&&c.y+ch>mr.t) selected.add(c.id); }); }
     m.style.display="none"; marq=null; render(); }
 });
 function positionCards(){ Array.prototype.slice.call(canvas.querySelectorAll(".card")).forEach(function(el){ var c=cardById(el.dataset.id); if(c){ el.style.left=c.x+"px"; el.style.top=c.y+"px"; } }); }
@@ -882,7 +896,7 @@ var sizerEl=$("sizer");
 function applyZoom(){
   canvas.style.transform="scale("+zoom+")";
   sizerEl.style.width=(4000*zoom)+"px"; sizerEl.style.height=(3000*zoom)+"px";
-  var pill=$("zoomPill"); pill.textContent=Math.round(zoom*100)+"%"; pill.classList.toggle("show",Math.abs(zoom-1)>0.005);
+  var pill=$("zoomPill"); pill.textContent=Math.round(zoom*100)+"%"; pill.classList.toggle("show",Math.abs(zoom-1)>0.005); var zs=$("zoomSlider"); if(zs&&document.activeElement!==zs) zs.value=Math.round(zoom*100);
 }
 function setZoom(nz,fx,fy){
   nz=Math.max(minZoom,Math.min(maxZoom,nz)); if(Math.abs(nz-zoom)<0.0005) return;
@@ -892,6 +906,8 @@ function setZoom(nz,fx,fy){
   board.scrollLeft=Math.max(0,lx*zoom-fx); board.scrollTop=Math.max(0,ly*zoom-fy);
 }
 $("zoomPill").onclick=function(){ setZoom(1); };
+$("zoomSlider").addEventListener("input",function(){ setZoom(parseInt(this.value,10)/100); });
+window.addEventListener("resize",function(){ var n=computeUiScale(); if(Math.abs(n-uiScale)>0.005){ uiScale=n; render(); } });
 board.addEventListener("wheel",function(e){ if(!e.ctrlKey) return; e.preventDefault(); var r=board.getBoundingClientRect(); setZoom(zoom*Math.exp(-e.deltaY*0.01), e.clientX-r.left, e.clientY-r.top); },{passive:false});
 if(hasGesture){
   var gStart=1;
@@ -1097,8 +1113,8 @@ function setBusy(msg){ var h=$("hint"); if(_hintDefault===null) _hintDefault=h.t
 function summarizeScene(text){
   return fetch("https://api.anthropic.com/v1/messages",{ method:"POST",
     headers:{"content-type":"application/json","x-api-key":aiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
-    body:JSON.stringify({ model:"claude-haiku-4-5-20251001", max_tokens:160,
-      system:"You write terse index-card summaries of screenplay scenes. Given one scene in Fountain format, reply with 1-3 short sentences (max ~40 words) capturing what happens, who is present, and the dramatic turn. Write in the same language as the scene. No preamble, no labels, no quotation marks - just the summary.",
+    body:JSON.stringify({ model:"claude-haiku-4-5-20251001", max_tokens:60,
+      system:"You write index-card loglines for screenplay scenes. Reply with ONE short, punchy line of at most ~12 words capturing the essence of the scene. Always write in the same language as the scene (e.g. Danish stays Danish). No preamble, no labels, no quotation marks - just the line.",
       messages:[{role:"user",content:String(text).slice(0,6000)}] }) })
   .then(function(r){ return r.text().then(function(t){ if(!r.ok) throw new Error(r.status+" "+t.slice(0,140)); return JSON.parse(t); }); })
   .then(function(d){ var c=(d.content||[]).filter(function(x){return x.type==="text";})[0]; return c?String(c.text).trim():""; });
@@ -1133,7 +1149,8 @@ function refreshProjSel(){ var sel=$("projSel"); sel.innerHTML="";
 $("projSel").onchange=function(){ state.activeId=$("projSel").value; selected=new Set(); buildRules(); save(); render(); };
 $("scriptName").addEventListener("input",function(){ active().name=$("scriptName").value; touch(); save(); refreshProjSel(); });
 $("renameProj").onclick=function(){ refreshProjSel(); $("scMsg") };
-$("newProj").onclick=function(){ var id=pid(); state.projects[id]={name:"Untitled Script",cards:[],shortcuts:emptyShort(),lang:state.defaultLang||"da",updatedAt:Date.now()}; state.activeId=id; selected=new Set(); buildRules(); touch(); save(); refreshProjSel(); render(); closeAllModals(); };
+function newProject(){ var id=pid(); state.projects[id]={name:"Untitled Script",cards:[],shortcuts:emptyShort(),lang:state.defaultLang||"da",updatedAt:Date.now()}; state.activeId=id; selected=new Set(); buildRules(); touch(); save(); refreshProjSel(); render(); closeAllModals(); }
+$("newProj").onclick=newProject; $("newProjTop").onclick=newProject;
 $("dupProj").onclick=function(){ var src=active(); var id=pid(); state.projects[id]=JSON.parse(JSON.stringify(src)); state.projects[id].name=(src.name||"Script")+" copy"; state.projects[id].updatedAt=Date.now();
   state.projects[id].cards.forEach(function(c){ c.id=uid(); }); state.activeId=id; selected=new Set(); buildRules(); touch(); save(); refreshProjSel(); render(); closeAllModals(); };
 $("delProj").onclick=function(){ if(Object.keys(state.projects).length<2){ alert("This is your only script — clear the board instead."); return; }
@@ -1149,6 +1166,15 @@ $("openStudio").onchange=function(e){ var f=e.target.files[0]; if(!f) return; va
   r.onload=function(){ try{ var s=JSON.parse(r.result); if(s&&s.projects){ state=shape(s); selected=new Set(); buildRules(); save(); refreshProjSel(); render(); closeAllModals(); } else alert("Not a Scene Studio backup."); }catch(err){ alert("Couldn't read that file."); } }; r.readAsText(f); e.target.value=""; };
 $("clearBoard").onclick=function(){ if(confirm("Clear all cards from THIS script? (Save a backup first if you want one.)")){ active().cards=[]; selected=new Set(); touch(); save(); render(); closeAllModals(); } };
 $("writeTogether").onclick=function(){ var ids=SK.readingOrder(cards().filter(function(c){return selected.has(c.id);})).map(function(c){return c.id;}); if(ids.length<2) return; openWrite(ids); };
+$("moveBtn").onclick=function(e){ e.stopPropagation(); if(countSelected()<1) return; var menu=$("moveMenu"); menu.innerHTML=""; var any=false;
+  Object.keys(state.projects).forEach(function(id){ if(id===state.activeId) return; any=true; var b=document.createElement("button"); b.textContent="\u2192 "+(state.projects[id].name||"Untitled"); b.onclick=function(){ moveSelectedTo(id); }; menu.appendChild(b); });
+  if(!any){ var nb=document.createElement("button"); nb.textContent="No other scripts \u2014 create one first"; nb.disabled=true; menu.appendChild(nb); }
+  menu.classList.toggle("show"); };
+function moveSelectedTo(pid){ var dest=state.projects[pid]; if(!dest) return; var ids=Array.from(selected);
+  var moved=ids.map(function(id){return cardById(id);}).filter(Boolean); if(!moved.length) return;
+  active().cards=active().cards.filter(function(c){ return !selected.has(c.id); });
+  moved.forEach(function(c){ dest.cards.push(c); }); dest.updatedAt=Date.now();
+  $("moveMenu").classList.remove("show"); selected=new Set(); touch(); save(); render(); }
 
 // ---------- modal infra ----------
 function openModal(id){ $("scrim").classList.add("show"); $(id).classList.add("show"); }
@@ -1156,7 +1182,7 @@ function closeAllModals(){ ["compileModal","settingsModal","cheatModal","menuMod
   $("formatMenu").classList.remove("show"); $("exportMenu").classList.remove("show"); if(!$("write").classList.contains("show")) $("scrim").classList.remove("show"); }
 Array.prototype.slice.call(document.querySelectorAll("[data-close]")).forEach(function(b){ b.onclick=closeAllModals; });
 document.addEventListener("keydown",function(e){ if(e.key==="Escape"){ if($("write").classList.contains("show")) closeWrite(); else closeAllModals(); } });
-document.addEventListener("click",function(e){ if(!e.target.closest(".pickwrap")){ $("formatMenu").classList.remove("show"); $("exportMenu").classList.remove("show"); } });
+document.addEventListener("click",function(e){ if(!e.target.closest(".pickwrap")){ $("formatMenu").classList.remove("show"); $("exportMenu").classList.remove("show"); $("moveMenu").classList.remove("show"); } });
 
 // ---------- Dropbox sync (ported) ----------
 var DBX_KEY="scene-studio-dropbox", DBX_FILE="/scene-studio-sync.json";
