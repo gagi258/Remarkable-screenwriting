@@ -89,7 +89,7 @@
   #zoomPill.show{display:block}
   #quickbar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:36;display:none;align-items:center;gap:6px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 8px}
   #quickbar.show{display:flex}
-  #quickbar input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(54vw,320px)}
+  #quickbar input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:min(40vw,230px)}
   #quickbar .seg button{padding:7px 9px;font-size:12px}
   /* overlays */
   .scrim{position:fixed;inset:0;background:rgba(20,18,15,.34);z-index:50;display:none}
@@ -195,6 +195,7 @@
   <button id="compileBtn" class="primary">Compile ▸</button>
   <button id="settingsBtn" title="Shortcuts & Dropbox sync">⚙</button>
   <button id="cheatBtn" title="Fountain cheat sheet">?</button>
+  <button id="keysBtn" title="Shortcut cheat sheet — opens a window you can put on a second screen">⌨</button>
   <button id="menuBtn" title="Scripts & files">⋯</button>
 </div>
 <div class="hint" id="hint">Add a card, double-click it to write the scene. Shift-click to pick a cluster.</div>
@@ -206,7 +207,9 @@
 <div id="zoomPill">100%</div>
 <div id="quickbar">
   <div class="seg" id="qkKind"><button data-k="scene" class="on">Scene</button><button data-k="seq">Seq</button></div>
-  <input id="qkInput" placeholder="Add a card… then Enter" enterkeyhint="done">
+  <input id="qkInput" placeholder="Scene heading / beat" enterkeyhint="next">
+  <input id="qkSummary" placeholder="Short summary (optional)" enterkeyhint="done">
+  <button id="qkAdd" class="primary">Add</button>
   <button id="qkClose" title="Close quick add">✕</button>
 </div>
 <button id="resumeFab">↩ Back to scene</button>
@@ -217,7 +220,7 @@
     <div class="capsub">Jot scenes as they come — each drops to the bottom of the board.</div>
     <div class="caprow"><input id="capInput" placeholder="A scene or a beat…" enterkeyhint="done" autocomplete="off"><button id="capAdd" class="primary">Add</button></div>
     <div id="capList" class="caplist"></div>
-    <a id="capOpen" class="capopen" href="#">Open the full board ›</a>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:18px"><a id="capOpen" class="capopen" href="#" style="margin-top:0">Open the full board ›</a><button id="capKeys" style="margin-left:auto;font:inherit;font-size:13px;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:9px 12px;cursor:pointer">⌨ Shortcuts</button></div>
   </div>
 </div>
 
@@ -839,6 +842,7 @@ function buildRules(){
     any:{}, extensions:Object.assign({},EXTENSIONS) };
 }
 buildRules();
+if(location.search.indexOf("cheat=1")>=0){ runCheatPage(); return; }
 
 // ---------- board ----------
 var canvas=$("canvas"), board=$("board");
@@ -891,7 +895,7 @@ function renameSeq(c){ var name=prompt("Sequence name:",c.title==="New sequence"
 // drag + select + marquee
 var drag=null, marq=null, rzdrag=null;
 board.addEventListener("pointerdown",function(e){
-  if(gesturing) return;
+  if(gesturing||e.button===2) return;
   var cardEl=e.target.closest(".card"); if(e.target.closest(".writebtn")) return;
   var rzEl=e.target.closest(".rz");
   if(rzEl && cardEl){ var rc=cardById(cardEl.dataset.id); if(rc){ rzdrag={id:rc.id,x:e.clientX,y:e.clientY,w0:rc.w||230,h0:rc.h||150,el:cardEl}; cardEl.setPointerCapture&&cardEl.setPointerCapture(e.pointerId); e.preventDefault(); return; } }
@@ -962,12 +966,13 @@ applyZoom();
 var qkKind="scene";
 $("quickToggle").onclick=function(){ var q=$("quickbar"); var show=!q.classList.contains("show"); q.classList.toggle("show",show); if(show) setTimeout(function(){$("qkInput").focus();},20); };
 $("qkClose").onclick=function(){ $("quickbar").classList.remove("show"); };
-Array.prototype.slice.call($("qkKind").children).forEach(function(b){ b.onclick=function(){ qkKind=b.dataset.k==="seq"?"sequence":"scene"; Array.prototype.slice.call($("qkKind").children).forEach(function(x){x.classList.toggle("on",x===b);}); $("qkInput").focus(); }; });
-$("qkInput").addEventListener("keydown",function(e){ if(e.key!=="Enter") return; e.preventDefault();
-  var v=$("qkInput").value.trim(); if(!v) return;
-  var p=placeNew(); var c={id:uid(),kind:qkKind,title:v,body:"",synopsis:"",x:p.x,y:p.y,w:230,h:150,color:""};
-  cards().push(c); touch(); save(); render(); scrollToCard(c); $("qkInput").value="";
-});
+function qkToggleSummary(){ var sm=$("qkSummary"); if(sm) sm.style.display=(qkKind==="scene")?"":"none"; }
+Array.prototype.slice.call($("qkKind").children).forEach(function(b){ b.onclick=function(){ qkKind=b.dataset.k==="seq"?"sequence":"scene"; Array.prototype.slice.call($("qkKind").children).forEach(function(x){x.classList.toggle("on",x===b);}); qkToggleSummary(); $("qkInput").focus(); }; });
+function qkAddCard(){ var v=$("qkInput").value.trim(); if(!v) return; var sum=(qkKind==="scene")?$("qkSummary").value.trim():""; var p=placeNew(); var c={id:uid(),kind:qkKind,title:v,body:"",synopsis:sum,x:p.x,y:p.y,w:230,h:150,color:""}; cards().push(c); touch(); save(); render(); scrollToCard(c); $("qkInput").value=""; $("qkSummary").value=""; $("qkInput").focus(); }
+$("qkAdd").onclick=qkAddCard;
+$("qkInput").addEventListener("keydown",function(e){ if(e.key!=="Enter") return; e.preventDefault(); if(qkKind==="scene"){ $("qkSummary").focus(); } else { qkAddCard(); } });
+$("qkSummary").addEventListener("keydown",function(e){ if(e.key!=="Enter") return; e.preventDefault(); qkAddCard(); });
+qkToggleSummary();
 
 // ---------- WRITE ----------
 var writing=null; var wta=$("wta");
@@ -1185,6 +1190,50 @@ $("aiRedo").onclick=function(){ var k=$("aiKey").value.trim(); if(k&&k!==aiKey){
 
 // ---------- CHEAT ----------
 $("cheatBtn").onclick=function(){ openModal("cheatModal"); };
+/*CHEAT_START*/
+function runCheatPage(){
+  document.title="Scene Studio — Shortcuts";
+  var css="body{margin:0;font:16px/1.6 ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif;background:#f4f3ef;color:#2a2722}"
+    +".cheatbar{position:sticky;top:0;background:#f4f3ef;padding:16px 18px 8px;border-bottom:1px solid #e7e3db}"
+    +"h1{font-size:18px;margin:0}.csub{color:#8c8678;font-size:13px;margin:2px 0 10px}"
+    +"#cq{width:100%;font:inherit;font-size:16px;padding:11px 13px;border:1px solid #e7e3db;border-radius:10px;background:#fffdfb}"
+    +"#cout{padding:6px 18px 56px}"
+    +"h2{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:#8c8678;margin:20px 0 7px;border-bottom:1px solid #e7e3db;padding-bottom:6px}"
+    +"table{width:100%;border-collapse:collapse}td{padding:7px 6px;vertical-align:top;border-bottom:1px solid #efece6;font-size:15px}"
+    +"td.k{white-space:nowrap;color:#36332e;font-weight:600;font-family:ui-monospace,Menlo,monospace;width:46%}td.v{color:#3a3733}";
+  document.head.insertAdjacentHTML("beforeend","<style>"+css+"</style>");
+  document.body.innerHTML='<div class="cheatbar"><h1>Scene Studio — Shortcuts</h1><div class="csub" id="csub"></div><input id="cq" type="search" placeholder="Search shortcuts…" autocomplete="off"></div><div id="cout"></div>';
+  function esc(x){ return String(x).replace(/[&<>]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[m];}); }
+  function mp(o){ var a=[]; Object.keys(o||{}).forEach(function(k){ a.push([k,o[k]]); }); return a; }
+  function sect(title,prs,Q){ var r=prs.filter(function(p){ return !Q || (p[0]+" "+p[1]).toLowerCase().indexOf(Q)>=0; }); if(!r.length) return ""; return "<h2>"+esc(title)+"</h2><table>"+r.map(function(p){ return "<tr><td class='k'>"+esc(p[0])+"</td><td class='v'>"+esc(p[1])+"</td></tr>"; }).join("")+"</table>"; }
+  function R(){
+    var Q=(document.getElementById("cq").value||"").toLowerCase();
+    var st=null; try{ st=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+    var p=(st&&st.projects&&st.projects[st.activeId])||active();
+    var sc=(p&&p.shortcuts)||{}; var lang=(p&&p.lang)||state.defaultLang||"da";
+    document.getElementById("csub").textContent=((p&&p.name)||"Scene Studio")+" · "+((LANGS[lang])||lang);
+    var bd=[["Select all cards","Cmd / Ctrl + A"],["Copy / Cut / Paste","Cmd/Ctrl + C / X / V"],["Duplicate","Cmd / Ctrl + D"],["Delete selected","Delete / Backspace"],["Resize all cards","+    −    0"],["Resize one card","drag bottom-right corner"],["Zoom","pinch, Ctrl-scroll, or the slider"],["Select many","drag a box on empty board"],["Card options & colour","right-click a card"],["New card / paste here","right-click empty board"],["Peek at board while writing","the ▢ Board button in the editor"]];
+    var pre=[["i.","INT."],["e.","EXT."],["i/e","INT./EXT."]];
+    var tm=(BUILTINS.times&&BUILTINS.times[lang])||{};
+    var ext=[]; Object.keys(EXTENSIONS).forEach(function(k){ ext.push(["("+k+")","("+EXTENSIONS[k]+")"]); });
+    var H="";
+    H+=sect("Board — keys & mouse",bd,Q);
+    H+=sect("Scene headings (built in)",pre,Q);
+    H+=sect("Time of day (built in)",mp(tm),Q);
+    H+=sect("Character extensions (built in)",ext,Q);
+    H+=sect("Characters — this script",mp(EC.parseRules(sc.characters)),Q);
+    H+=sect("Locations — this script",mp(EC.parseRules(sc.locations)),Q);
+    H+=sect("Extra prefixes — this script",mp(EC.parseRules(sc.prefixes)),Q);
+    H+=sect("Extra times — this script",mp(EC.parseRules(sc.times)),Q);
+    if(!H) H="<p style='color:#8c8678;padding:10px 0'>No matches.</p>";
+    document.getElementById("cout").innerHTML=H;
+  }
+  document.getElementById("cq").addEventListener("input",R);
+  R(); setInterval(R,2500); window.addEventListener("focus",R);
+}
+function openShortcuts(){ var w=window.open(location.pathname+"?cheat=1","scenestudioshortcuts","width=480,height=900"); if(!w){ alert("Allow pop-ups for this page so the shortcut sheet can open in its own window — then drag it to your second screen."); } }
+/*CHEAT_END*/
+$("keysBtn").onclick=openShortcuts;
 
 // ---------- MENU: projects + files ----------
 $("menuBtn").onclick=function(){ $("scriptName").value=active().name||""; openModal("menuModal"); };
@@ -1227,19 +1276,38 @@ $("colorBtn").onclick=function(e){ e.stopPropagation(); if(countSelected()<1) re
   PALETTE.forEach(function(p){ var b=document.createElement("button"); b.className="sw"; b.title=p[0]; b.style.background=p[1]||"#fff"; if(!p[1]) b.style.border="1px dashed #bbb"; b.onclick=function(){ setColorSelected(p[1]); menu.classList.remove("show"); }; menu.appendChild(b); });
   menu.classList.toggle("show"); };
 function deleteSelected(){ var ids=Array.from(selected); if(!ids.length) return; if(ids.length>=3 && !confirm("Delete "+ids.length+" cards?")) return; active().cards=active().cards.filter(function(c){ return !selected.has(c.id); }); selected=new Set(); touch(); save(); render(); }
+function selectAllCards(){ selected=new Set(cards().map(function(c){return c.id;})); render(); }
+var clipboard=[];
+function copySelected(){ var sel=cards().filter(function(c){return selected.has(c.id);}); if(!sel.length) return; clipboard=sel.map(function(c){ return {kind:c.kind,title:c.title,body:c.body||"",synopsis:c.synopsis||"",color:c.color||"",w:c.w||230,h:c.h||150,dx:(c.x||0),dy:(c.y||0)}; }); var minx=Math.min.apply(null,clipboard.map(function(c){return c.dx;})), miny=Math.min.apply(null,clipboard.map(function(c){return c.dy;})); clipboard.forEach(function(c){ c.dx-=minx; c.dy-=miny; }); }
+function pasteCards(atX,atY){ if(!clipboard.length) return; var ox,oy; if(atX!=null){ ox=atX; oy=atY; } else { var p=placeNew(); ox=p.x; oy=p.y; } var nw=[]; clipboard.forEach(function(c){ var nc={id:uid(),kind:c.kind,title:c.title,body:c.body,synopsis:c.synopsis,color:c.color,w:c.w,h:c.h,x:ox+c.dx,y:oy+c.dy}; cards().push(nc); nw.push(nc.id); }); selected=new Set(nw); touch(); save(); render(); }
+function duplicateSelected(){ var sel=cards().filter(function(c){return selected.has(c.id);}); if(!sel.length) return; var nw=[]; sel.forEach(function(c){ var nc=JSON.parse(JSON.stringify(c)); nc.id=uid(); nc.x=(c.x||40)+26; nc.y=(c.y||40)+26; cards().push(nc); nw.push(nc.id); }); selected=new Set(nw); touch(); save(); render(); }
+function clientToLogical(cx,cy){ var r=board.getBoundingClientRect(); return { x:Math.max(0,Math.round((cx-r.left+board.scrollLeft)/zoom)), y:Math.max(0,Math.round((cy-r.top+board.scrollTop)/zoom)) }; }
+function showBoardMenu(x,y,pt){
+  var m=$("cardMenu"); m.innerHTML="";
+  function item(label,fn,dis){ var b=document.createElement("button"); b.textContent=label; if(dis){ b.disabled=true; } else { b.onclick=function(){ m.classList.remove("show"); fn(); }; } m.appendChild(b); }
+  item("New scene here",function(){ var c={id:uid(),kind:"scene",title:"New scene",body:"",synopsis:"",x:pt.x,y:pt.y,w:230,h:150,color:""}; cards().push(c); selected=new Set([c.id]); touch(); save(); render(); });
+  item("New sequence here",function(){ var c={id:uid(),kind:"sequence",title:"New sequence",body:"",x:pt.x,y:pt.y,w:230,h:150,color:""}; cards().push(c); touch(); save(); render(); renameSeq(c); });
+  item(clipboard.length?("Paste "+clipboard.length+" card"+(clipboard.length>1?"s":"")+" here"):"Paste (nothing copied)",function(){ pasteCards(pt.x,pt.y); },clipboard.length===0);
+  item("Select all",function(){ selectAllCards(); });
+  m.style.left=Math.min(x,window.innerWidth-200)+"px"; m.style.top=Math.min(y,window.innerHeight-210)+"px"; m.classList.add("show");
+}
 function showCardMenu(x,y,card){
   var m=$("cardMenu"); m.innerHTML="";
   function item(label,fn){ var b=document.createElement("button"); b.textContent=label; b.onclick=function(){ m.classList.remove("show"); fn(); }; m.appendChild(b); }
   if(card.kind==="sequence"){ item("Rename",function(){ renameSeq(card); }); }
   else { item("Write / edit",function(){ openWrite([card.id]); }); item("Re-summarize (AI)",function(){ summarizeOne(card); }); }
   item(card.kind==="sequence"?"Make it a scene":"Make it a sequence",function(){ card.kind=card.kind==="sequence"?"scene":"sequence"; touch(); save(); render(); });
+  Object.keys(state.projects).forEach(function(pid){ if(pid===state.activeId) return; item("Move to: "+(state.projects[pid].name||"Untitled"),function(){ if(!selected.has(card.id)) selected=new Set([card.id]); moveSelectedTo(pid); }); });
   var row=document.createElement("div"); row.className="swrow";
   PALETTE.forEach(function(p){ var b=document.createElement("button"); b.className="sw"; b.title=p[0]; b.style.background=p[1]||"#fff"; if(!p[1]) b.style.border="1px dashed #bbb"; b.onclick=function(){ card.color=p[1]; touch(); save(); render(); m.classList.remove("show"); }; row.appendChild(b); });
   m.appendChild(row);
+  item("Duplicate",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); duplicateSelected(); });
+  item("Copy",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); copySelected(); });
+  item("Cut",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); copySelected(); deleteSelected(); });
   item("Delete",function(){ if(!selected.has(card.id)) selected=new Set([card.id]); deleteSelected(); });
   m.style.left=Math.min(x,window.innerWidth-200)+"px"; m.style.top=Math.min(y,window.innerHeight-240)+"px"; m.classList.add("show");
 }
-canvas.addEventListener("contextmenu",function(e){ var el=e.target.closest(".card"); if(!el) return; e.preventDefault(); var c=cardById(el.dataset.id); if(!c) return; if(!selected.has(c.id)){ selected=new Set([c.id]); render(); } showCardMenu(e.clientX,e.clientY,c); });
+canvas.addEventListener("contextmenu",function(e){ var el=e.target.closest(".card"); if(el){ e.preventDefault(); var c=cardById(el.dataset.id); if(!c) return; if(!selected.has(c.id)){ selected=new Set([c.id]); render(); } showCardMenu(e.clientX,e.clientY,c); } else { e.preventDefault(); showBoardMenu(e.clientX,e.clientY,clientToLogical(e.clientX,e.clientY)); } });
 document.addEventListener("click",function(e){ if(!e.target.closest(".cardmenu")) $("cardMenu").classList.remove("show"); });
 
 // ---- resize all ----
@@ -1272,6 +1340,7 @@ function addQuickScene(v){ v=String(v||"").trim(); if(!v) return null; var p=pla
 $("capAdd").onclick=function(){ var c=addQuickScene($("capInput").value); if(c){ var d=document.createElement("div"); d.className="capitem"; d.textContent=c.title; var L=$("capList"); L.insertBefore(d,L.firstChild); $("capInput").value=""; $("capInput").focus(); } };
 $("capInput").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); $("capAdd").click(); } });
 $("capOpen").onclick=function(e){ e.preventDefault(); $("capture").classList.remove("show"); };
+$("capKeys").onclick=openShortcuts;
 if((window.innerWidth||999)<700) $("capture").classList.add("show");
 
 // ---------- modal infra ----------
@@ -1283,6 +1352,12 @@ document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){ if($("write").classList.contains("show")) closeWrite(); else closeAllModals(); return; }
   var ae=document.activeElement, typing=ae&&(ae.tagName==="INPUT"||ae.tagName==="TEXTAREA");
   if(typing || $("write").classList.contains("show")) return;
+  var mod=e.metaKey||e.ctrlKey;
+  if(mod && (e.key==="a"||e.key==="A")){ e.preventDefault(); selectAllCards(); return; }
+  if(mod && (e.key==="c"||e.key==="C")){ e.preventDefault(); copySelected(); return; }
+  if(mod && (e.key==="x"||e.key==="X")){ e.preventDefault(); copySelected(); deleteSelected(); return; }
+  if(mod && (e.key==="v"||e.key==="V")){ e.preventDefault(); pasteCards(); return; }
+  if(mod && (e.key==="d"||e.key==="D")){ e.preventDefault(); duplicateSelected(); return; }
   if(e.key==="+"||e.key==="="){ resizeAll(1.12); }
   else if(e.key==="-"||e.key==="_"){ resizeAll(1/1.12); }
   else if(e.key==="0"){ resizeReset(); }
