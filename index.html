@@ -65,6 +65,8 @@
   .zoomwrap{display:inline-flex;align-items:center;gap:6px}
   #zoomSlider{width:120px}
   #resumeFab{position:fixed;right:16px;bottom:16px;z-index:45;display:none;background:var(--accent);color:#fff;border:0;border-radius:22px;padding:11px 16px;font-weight:600;box-shadow:var(--shadow);cursor:pointer}
+  #scratchFab{position:fixed;left:14px;bottom:14px;z-index:55;width:42px;height:42px;border-radius:50%;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;font-size:16px;line-height:1}
+  #scratchFab:hover{background:var(--accent-soft)}
   #scratch{top:0;left:0;bottom:0;width:min(420px,94vw);border-right:1px solid var(--line)}
   #scratchBody{flex:1;display:flex;flex-direction:column;padding:10px 14px;gap:10px;overflow:auto}
   #scratchTasks{display:flex;flex-direction:column;gap:5px}
@@ -97,10 +99,12 @@
   .emptyMsg{position:absolute;top:46%;left:0;right:0;text-align:center;color:var(--muted);font-size:14px;pointer-events:none}
   .emptyMsg b{color:var(--ink)}
   #marquee{position:absolute;border:1px solid var(--sel);background:rgba(46,109,246,.08);display:none;z-index:5}
-  #zoneDivider{position:absolute;top:0;height:3000px;left:1322px;border-left:1px dashed #d0cabc;pointer-events:none;z-index:1}
+  #zoneDivider{position:absolute;top:0;height:3000px;width:16px;margin-left:-8px;left:1322px;cursor:ew-resize;z-index:3;background:transparent}
+  #zoneDivider:before{content:"";position:absolute;left:8px;top:0;bottom:0;border-left:1px dashed #c7c1b2}
+  #zoneDivider:hover:before{border-left-color:var(--accent)}
   .zonelabel{position:absolute;top:14px;font:600 12px/1 ui-sans-serif,-apple-system,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#b3ab9d;pointer-events:none;user-select:none;z-index:1}
   #zoneLabelL{left:50px}#zoneLabelR{left:1362px}
-  #zoomPill{position:fixed;left:14px;bottom:14px;z-index:35;background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:12.5px;box-shadow:var(--shadow);cursor:pointer;display:none}
+  #zoomPill{position:fixed;left:14px;bottom:64px;z-index:35;background:#fff;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:12.5px;box-shadow:var(--shadow);cursor:pointer;display:none}
   #zoomPill.show{display:block}
   #quickbar{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:36;display:none;align-items:center;gap:6px;background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:7px 8px}
   #quickbar.show{display:flex}
@@ -116,7 +120,11 @@
   #write.has-prev{width:min(1180px,98vw)}
   #write.fullscreen{inset:0;left:0;width:100vw;max-width:100vw;border-left:0}
   #sceneList{width:212px;flex:0 0 212px;overflow:auto;border-right:1px solid var(--line);padding:6px 4px;display:none}
-  #write.showlist #sceneList{display:block}
+  #write.showlist #sceneList, #write.hoverlist #sceneList{display:block}
+  #listHover{position:absolute;left:0;top:50px;bottom:0;width:12px;z-index:4;cursor:pointer}
+  #listHover:before{content:"";position:absolute;left:3px;top:50%;width:3px;height:48px;margin-top:-24px;border-radius:3px;background:var(--line)}
+  #write.showlist #listHover, #write.hoverlist #listHover{display:none}
+  #write.fullscreen #listHover{display:none}
   .slseq{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--seq);padding:9px 8px 3px;font-weight:700}
   .slrow{display:flex;gap:7px;align-items:baseline;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:12.5px}
   .slrow:hover{background:var(--accent-soft)}
@@ -124,6 +132,9 @@
   .slrow .sln{color:var(--muted);font-size:10.5px;min-width:15px;font-variant-numeric:tabular-nums}
   .slrow .slt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
   .slrow.w .slt{color:var(--ink)}
+  .slrow .slmv{display:flex;gap:1px;margin-left:4px}
+  .slrow .slmv button{border:0;background:transparent;cursor:pointer;font-size:12px;color:var(--muted);padding:0 4px;border-radius:4px}
+  .slrow .slmv button:hover{background:#fff;color:var(--ink)}
   .whead{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .whead .wt{font-weight:650;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:80px}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
@@ -236,7 +247,6 @@
   <button id="settingsBtn" title="Shortcuts & Dropbox sync">⚙</button>
   <button id="cheatBtn" title="Fountain cheat sheet">?</button>
   <button id="keysBtn" title="Shortcut cheat sheet — opens a window you can put on a second screen">⌨</button>
-  <button id="scratchBtn" title="Scratchpad — snippets, ideas, to-dos">✐ Scratch</button>
   <button id="menuBtn" title="Scripts & files">⋯</button>
 </div>
 <div class="hint" id="hint">Add a card, double-click it to write the scene. Shift-click to pick a cluster.</div>
@@ -256,6 +266,7 @@
   <button id="qkClose" title="Close quick add">✕</button>
 </div>
 <button id="resumeFab">↩ Back to scene</button>
+<button id="scratchFab" title="Scratchpad — jot snippets, ideas, to-dos (works anywhere)">✐</button>
 <div class="sheet" id="scratch">
   <div class="whead"><span class="wt">Scratchpad</span><button id="scratchTidy" title="Tidy / expand shortcuts">Tidy</button><button id="scratchClose">Close</button></div>
   <div id="scratchBody">
@@ -280,6 +291,7 @@ Fountain shortcuts work here too. Start a line with [ ] for a tick box, e.g.  [ 
 <!-- WRITE PANEL -->
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="write">
+  <div id="listHover"></div>
   <div class="whead">
     <span class="wt" id="writeTitle">Scene</span>
     <div class="seg" id="langSeg"><button data-l="da">DA</button><button data-l="en">EN</button></div>
@@ -779,7 +791,7 @@ Your name & location shortcuts expand as you type; press Tidy to clean a pasted 
     });
     var newer = (a.updatedAt || 0) >= (b.updatedAt || 0) ? a : b;
     var activeId = projects[newer.activeId] ? newer.activeId : Object.keys(projects)[0] || null;
-    return { activeId: activeId, defaultLang: newer.defaultLang || "da", sceneNumbers: !!newer.sceneNumbers, gridSize: (newer.gridSize||a.gridSize||b.gridSize||30), projects: projects, tombstones: tomb, updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0) };
+    return { activeId: activeId, defaultLang: newer.defaultLang || "da", sceneNumbers: !!newer.sceneNumbers, gridSize: (newer.gridSize||a.gridSize||b.gridSize||30), dividerX: (newer.dividerX||a.dividerX||b.dividerX||1322), projects: projects, tombstones: tomb, updatedAt: Math.max(a.updatedAt || 0, b.updatedAt || 0) };
   }
   function _crypto() { return (typeof crypto !== "undefined" && crypto) || (root && root.crypto) || globalThis.crypto; }
   function b64url(bytes) { var bin = ""; for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
@@ -875,12 +887,12 @@ var state=load();
 function load(){
   try{ var s=JSON.parse(localStorage.getItem(KEY)); if(s&&s.projects&&Object.keys(s.projects).length) return shape(s); }catch(e){}
   var id=pid(), now=Date.now();
-  var st={activeId:id, defaultLang:"da", sceneNumbers:false, gridSize:30, projects:{}, tombstones:{}, updatedAt:now};
+  var st={activeId:id, defaultLang:"da", sceneNumbers:false, gridSize:30, dividerX:1322, projects:{}, tombstones:{}, updatedAt:now};
   st.projects[id]={name:"Untitled Script", cards:[], shortcuts:emptyShort(), lang:"da", updatedAt:now};
   return st;
 }
 function shape(s){
-  if(!s.projects) s.projects={}; if(!s.tombstones) s.tombstones={}; if(typeof s.updatedAt!=="number") s.updatedAt=Date.now(); if(typeof s.gridSize!=="number") s.gridSize=30;
+  if(!s.projects) s.projects={}; if(!s.tombstones) s.tombstones={}; if(typeof s.updatedAt!=="number") s.updatedAt=Date.now(); if(typeof s.gridSize!=="number") s.gridSize=30; if(typeof s.dividerX!=="number") s.dividerX=1322;
   if(!Object.keys(s.projects).length){ var id=pid(); s.projects[id]={name:"Untitled Script",cards:[],shortcuts:emptyShort(),lang:s.defaultLang||"da",updatedAt:Date.now()}; s.activeId=id; }
   if(!s.projects[s.activeId]) s.activeId=Object.keys(s.projects)[0];
   Object.keys(s.projects).forEach(function(id){ var p=s.projects[id];
@@ -940,7 +952,7 @@ function render(){
 
 var zoom=1, minZoom=0.3, maxZoom=2.5;
 function placeNew(){
-  var cs=cards().filter(function(c){return (c.x||0)<1322;});
+  var cs=cards().filter(function(c){return (c.x||0)<(state.dividerX||1322);});
   if(!cs.length) return {x:48,y:92};
   var bottom=Math.max.apply(null,cs.map(function(c){return (c.y||0)+(c.h||150);}));
   var band=cs.filter(function(c){ return (c.y||0)+(c.h||150) > bottom-40; });
@@ -1077,6 +1089,7 @@ function resumeWrite(){ $("resumeFab").style.display="none"; if(resumeIds&&resum
 $("viewBoardBtn").onclick=minimizeWrite;
 $("resumeFab").onclick=resumeWrite;
 $("markBtn").onclick=function(){ if(!writing||writing.cluster) return; var c=cardById(writing.ids[0]); if(!c) return; c.mark=isWritten(c)?"unwritten":"written"; $("markBtn").textContent=isWritten(c)?"Mark unwritten":"Mark written"; touch(); save(); };
+function moveCurrentScene(dir){ if(!writing||writing.cluster) return; var id=writing.ids[0], ord=SK.readingOrder(cards()), i=-1; for(var k=0;k<ord.length;k++){ if(ord[k].id===id){ i=k; break; } } var j=i+dir; if(i<0||j<0||j>=ord.length) return; var A=ord[i], B=ord[j], x=A.x,y=A.y; A.x=B.x; A.y=B.y; B.x=x; B.y=y; touch(); save(); renderSceneList(); render(); }
 function renderSceneList(){
   var box=$("sceneList"); if(!box) return; box.innerHTML="";
   var curId=(writing&&!writing.cluster)?writing.ids[0]:null, n=0;
@@ -1085,12 +1098,18 @@ function renderSceneList(){
     n++; var row=document.createElement("div"); row.className="slrow"+(c.id===curId?" cur":"")+(isWritten(c)?" w":"");
     var a=document.createElement("span"); a.className="sln"; a.textContent=n;
     var b=document.createElement("span"); b.className="slt"; b.textContent=c.title||"(scene)";
-    row.appendChild(a); row.appendChild(b); row.onclick=function(){ openWrite([c.id]); }; box.appendChild(row);
+    row.appendChild(a); row.appendChild(b);
+    if(c.id===curId){ var mv=document.createElement("span"); mv.className="slmv";
+      var up=document.createElement("button"); up.textContent="↑"; up.title="Move scene up"; up.onclick=function(ev){ ev.stopPropagation(); moveCurrentScene(-1); };
+      var dn=document.createElement("button"); dn.textContent="↓"; dn.title="Move scene down"; dn.onclick=function(ev){ ev.stopPropagation(); moveCurrentScene(1); };
+      mv.appendChild(up); mv.appendChild(dn); row.appendChild(mv); }
+    row.onclick=function(){ openWrite([c.id]); }; box.appendChild(row);
   });
   var cur=box.querySelector(".cur"); if(cur&&cur.scrollIntoView){ try{ cur.scrollIntoView({block:"nearest"}); }catch(e){} }
 }
 var slT; function schedSceneList(){ clearTimeout(slT); slT=setTimeout(renderSceneList,200); }
 $("sceneListBtn").onclick=function(){ $("write").classList.toggle("showlist"); renderSceneList(); setTimeout(fitWritePreview,20); };
+(function(){ var lh=$("listHover"); if(!lh) return; lh.addEventListener("mouseenter",function(){ $("write").classList.add("hoverlist"); renderSceneList(); setTimeout(fitWritePreview,20); }); var sl=$("sceneList"); if(sl) sl.addEventListener("mouseleave",function(){ if(!$("write").classList.contains("showlist")){ $("write").classList.remove("hoverlist"); setTimeout(fitWritePreview,20); } }); })();
 $("fullBtn").onclick=function(){ var w=$("write"); var fs=w.classList.toggle("fullscreen"); if(fs) w.classList.add("showlist"); $("fullBtn").textContent=fs?"⤡ Exit":"⛶ Full"; renderSceneList(); setTimeout(fitWritePreview,30); };
 function escHL(x){ return String(x).replace(/[&<>]/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;"}[m];}); }
 function classifyHL(text){
@@ -1119,7 +1138,7 @@ function setScratch(v){ try{ localStorage.setItem(SCRATCH_KEY,v); }catch(e){} }
 function renderTasks(){ var box=$("scratchTasks"); if(!box) return; box.innerHTML=""; var lines=String($("scratchTa").value||"").split("\n"); lines.forEach(function(ln,idx){ var m=ln.match(/^(\s*(?:[-*]\s+)?)\[([ xX])\]\s?(.*)$/); if(!m) return; var done=m[2].toLowerCase()==="x"; var row=document.createElement("label"); row.className="taskrow"+(done?" done":""); var cb=document.createElement("input"); cb.type="checkbox"; cb.checked=done; cb.addEventListener("change",function(){ var L=String($("scratchTa").value).split("\n"); L[idx]=L[idx].replace(/\[([ xX])\]/, cb.checked?"[x]":"[ ]"); $("scratchTa").value=L.join("\n"); setScratch($("scratchTa").value); renderTasks(); }); var sp=document.createElement("span"); sp.textContent=m[3]||"(empty)"; row.appendChild(cb); row.appendChild(sp); box.appendChild(row); }); }
 function openScratch(){ $("scratchTa").value=getScratch(); renderTasks(); $("scratch").classList.add("show"); setTimeout(function(){ $("scratchTa").focus(); },20); }
 function closeScratch(){ $("scratch").classList.remove("show"); }
-$("scratchBtn").onclick=function(){ if($("scratch").classList.contains("show")) closeScratch(); else openScratch(); };
+$("scratchFab").onclick=function(){ if($("scratch").classList.contains("show")) closeScratch(); else openScratch(); };
 $("scratchClose").onclick=closeScratch;
 var scratchT;
 $("scratchTa").addEventListener("input",function(){ var ta=$("scratchTa"); if(ta.selectionStart===ta.selectionEnd){ var pos=ta.selectionStart, ch=ta.value.charAt(pos-1); var trig=ch===" "?"space":(ch==="-"?"dash":(ch===")"?"closeparen":((ch==="\n"||ch==="\r")?"enter":null))); if(trig){ var res=EC.compute(ta.value,pos,trig,rules); if(res){ ta.value=res.value; ta.selectionStart=ta.selectionEnd=res.caret; } } } setScratch(ta.value); clearTimeout(scratchT); scratchT=setTimeout(renderTasks,250); });
@@ -1239,6 +1258,8 @@ function fdxToFountain(xml){
 function importScriptFile(file){ if(!file) return; var r=new FileReader(); r.onload=function(){ var txt=String(r.result); var head=txt.slice(0,500); var fountain=(/<\?xml|<FinalDraft/i.test(head))?fdxToFountain(txt):txt; importNodesToBoard(SK.textToCards(fountain)); }; r.readAsText(file); }
 function applyGrid(){ var g=(state&&state.gridSize)||30; board.style.backgroundSize=g+"px "+g+"px"; var gv=$("gridVal"); if(gv) gv.textContent=g+" px"; }
 $("gridSlider").addEventListener("input",function(){ state.gridSize=parseInt(this.value,10)||30; applyGrid(); touch(); save(); });
+function applyDivider(){ var d=$("zoneDivider"), x=(state.dividerX||1322); if(d) d.style.left=x+"px"; var zr=$("zoneLabelR"); if(zr) zr.style.left=(x+40)+"px"; }
+(function(){ var d=$("zoneDivider"); if(!d) return; d.addEventListener("pointerdown",function(e){ e.stopPropagation(); e.preventDefault(); function mv(ev){ var r=board.getBoundingClientRect(); state.dividerX=Math.max(220,Math.round((ev.clientX-r.left+board.scrollLeft)/zoom)); applyDivider(); } function up(){ document.removeEventListener("pointermove",mv); document.removeEventListener("pointerup",up); touch(); save(); } document.addEventListener("pointermove",mv); document.addEventListener("pointerup",up); }); })();
 $("importFile").onchange=function(e){ importScriptFile(e.target.files[0]); e.target.value=""; };
 $("importTopFile").onchange=function(e){ importScriptFile(e.target.files[0]); e.target.value=""; };
 
@@ -1462,7 +1483,7 @@ canvas.addEventListener("contextmenu",function(e){ var el=e.target.closest(".car
 document.addEventListener("click",function(e){ if(!e.target.closest(".cardmenu")) $("cardMenu").classList.remove("show"); });
 
 // ---- resize all ----
-function resizeAll(f){ cards().forEach(function(c){ c.w=Math.max(150,Math.min(560,Math.round((c.w||230)*f))); c.h=Math.max(96,Math.min(440,Math.round((c.h||150)*f))); }); touch(); save(); render(); }
+function resizeAll(f){ cards().forEach(function(c){ c.w=Math.max(150,Math.min(560,Math.round((c.w||230)*f))); c.h=Math.max(96,Math.min(440,Math.round((c.h||150)*f))); c.x=Math.round((c.x||0)*f); c.y=Math.round((c.y||0)*f); }); state.dividerX=Math.round((state.dividerX||1322)*f); applyDivider(); touch(); save(); render(); }
 function resizeReset(){ cards().forEach(function(c){ c.w=230; c.h=150; }); touch(); save(); render(); }
 $("cardSmaller").onclick=function(){ resizeAll(1/1.12); };
 $("cardBigger").onclick=function(){ resizeAll(1.12); };
@@ -1480,7 +1501,7 @@ function arrange(mode){
   if(mode==="scatter"){ list.forEach(function(c){ c.x=GX+Math.round(Math.random()*1500); c.y=GY+Math.round(Math.random()*1000); }); }
   else if(mode==="screenplay"){ var col=0,row=0; list.forEach(function(c){ if(c.kind==="sequence"){ if(col>0){row++;col=0;} c.x=GX; c.y=GY+row*stepY; row++; } else { c.x=GX+col*stepX; c.y=GY+row*stepY; col++; if(col>=perRow){col=0;row++;} } }); }
   else if(mode==="sequence"){ var y=GY,col=0; list.forEach(function(c){ if(c.kind==="sequence"){ if(col>0){y+=stepY;} col=0; c.x=GX; c.y=y; y+=Math.round(stepY*0.8); } else { c.x=GX+44+col*stepX; c.y=y; col++; if(col>=perRow-1){col=0;y+=stepY;} } }); }
-  else if(mode==="status"){ var li=0,ri=0,W=4; list.forEach(function(c){ if(c.kind!=="sequence" && String(c.body||"").trim()){ c.x=1362+(ri%W)*stepX; c.y=GY+44+Math.floor(ri/W)*stepY; ri++; } else { c.x=GX+(li%W)*stepX; c.y=GY+44+Math.floor(li/W)*stepY; li++; } }); }
+  else if(mode==="status"){ var RB=(state.dividerX||1322)+40; var li=0,ri=0,W=4; list.forEach(function(c){ if(c.kind!=="sequence" && String(c.body||"").trim()){ c.x=RB+(ri%W)*stepX; c.y=GY+44+Math.floor(ri/W)*stepY; ri++; } else { c.x=GX+(li%W)*stepX; c.y=GY+44+Math.floor(li/W)*stepY; li++; } }); }
   else { var col2=0,row2=0, seqs=list.filter(function(c){return c.kind==="sequence";}), scenes=list.filter(function(c){return c.kind!=="sequence";}); seqs.concat(scenes).forEach(function(c){ c.x=GX+col2*stepX; c.y=GY+row2*stepY; col2++; if(col2>=perRow){col2=0;row2++;} }); }
   touch(); save(); render();
 }
@@ -1567,7 +1588,7 @@ try{ if(navigator.serviceWorker&&(location.protocol==="https:"||location.protoco
 } }catch(e){}
 
 // ---------- init ----------
-refreshProjSel(); render(); applyGrid();
+refreshProjSel(); render(); applyGrid(); applyDivider();
 try{ dbxHandleRedirect().then(function(did){ if(!did&&dbx.refreshToken) dbxSyncNow(true); }); }catch(e){}
 })();
 </script>
