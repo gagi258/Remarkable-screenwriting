@@ -63,13 +63,20 @@
   .scrim.show{display:block}
   .sheet{position:fixed;z-index:51;background:var(--panel);box-shadow:var(--shadow);display:none;flex-direction:column}
   .sheet.show{display:flex}
-  #write{top:0;right:0;bottom:0;width:min(680px,96vw);border-left:1px solid var(--line)}
+  #write{top:0;right:0;bottom:0;width:min(720px,96vw);border-left:1px solid var(--line);transition:width .15s ease}
+  #write.has-prev{width:min(1180px,98vw)}
   .whead{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
   .whead .wt{font-weight:650;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:80px}
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{border:0;border-radius:0;padding:6px 11px;font-size:12.5px;background:#fff}
   .seg button.on{background:var(--ink);color:#fff}
-  #wbody{flex:1;display:flex;flex-direction:column;padding:10px 14px;gap:8px;overflow:auto}
+  #wbody{flex:1;display:flex;flex-direction:row;gap:10px;padding:10px 14px;overflow:hidden}
+  .wedit{flex:1 1 50%;min-width:0;display:flex;flex-direction:column;gap:8px;overflow:auto}
+  .wprev{flex:1 1 50%;min-width:0;overflow:auto;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px}
+  #wprevPages{transform-origin:top left}
+  #write.mode-edit .wprev{display:none} #write.mode-edit .wedit{flex-basis:100%}
+  #write.mode-prev .wedit{display:none} #write.mode-prev .wprev{flex-basis:100%}
+  @media(max-width:760px){ #viewWrite [data-m=split]{display:none} #write.has-prev{width:96vw} }
   textarea.write{width:100%;flex:1;min-height:240px;resize:none;border:1px solid var(--line);border-radius:10px;
     padding:14px;font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:#fcfbf9;color:var(--ink)}
   textarea.write:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
@@ -161,6 +168,7 @@
   <div class="whead">
     <span class="wt" id="writeTitle">Scene</span>
     <div class="seg" id="langSeg"><button data-l="da">DA</button><button data-l="en">EN</button></div>
+    <div class="seg" id="viewWrite"><button data-m="edit">Write</button><button data-m="split">Split</button><button data-m="prev">Preview</button></div>
     <div class="pickwrap">
       <button id="formatBtn" title="Force this line's element type">Format as ▾</button>
       <div class="pickmenu" id="formatMenu">
@@ -178,11 +186,14 @@
     <button id="writeClose">Done</button>
   </div>
   <div id="wbody">
+    <div class="wedit">
     <div class="clusternote" id="clusterNote" style="display:none"></div>
     <textarea id="wta" class="write" spellcheck="true" placeholder="Write the scene here.
 
 Start with a slug line — type  i.  +space for INT.,  e.  for EXT., then your location and  - d.  for DAG/DAY.
 Your name & location shortcuts expand as you type; press Tidy to clean a pasted draft."></textarea>
+    </div>
+    <div class="wprev"><div id="wprevPages"></div></div>
   </div>
   <div class="wfoot">
     <span style="font-size:12px;color:var(--muted)">Auto-types your shortcuts · saves to the card automatically</span>
@@ -839,7 +850,7 @@ function openWrite(ids){
     wta.value=ids.map(function(id){var c=cardById(id);return String(c.body||"").trim()||(SK.isSceneLine(c.title||"")?c.title:("."+(c.title||"UNTITLED")));}).join("\n\n");
   } else { note.style.display="none"; var c=cardById(ids[0]); $("writeTitle").textContent=c.title||"Scene"; wta.value=c.body||""; }
   setLang(active().lang||state.defaultLang);
-  $("scrim").classList.add("show"); $("write").classList.add("show"); setTimeout(function(){ wta.focus(); },30);
+  $("scrim").classList.add("show"); $("write").classList.add("show"); applyWriteMode(); setTimeout(function(){ wta.focus(); },30);
 }
 function closeWrite(){ if(writing) commitWrite(); writing=null; $("scrim").classList.remove("show"); $("write").classList.remove("show"); render(); }
 function commitWrite(){
@@ -865,9 +876,10 @@ wta.addEventListener("input",function(){
     if(trig){ var res=EC.compute(wta.value,pos,trig,rules); if(res){ wta.value=res.value; wta.selectionStart=wta.selectionEnd=res.caret; } }
   }
   if(writing&&!writing.cluster){ var c=cardById(writing.ids[0]); if(c){ c.body=wta.value; touch(); save(); } }
+  updateWritePreview();
 });
 $("tidyBtn").onclick=function(){ var before=wta.value, after=EC.tidy(before,rules); wta.value=after; $("writeMsg").textContent=after===before?"Already tidy":"Tidied";
-  if(writing&&!writing.cluster){ var c=cardById(writing.ids[0]); if(c){ c.body=after; touch(); save(); } } setTimeout(function(){$("writeMsg").textContent="";},1500); };
+  if(writing&&!writing.cluster){ var c=cardById(writing.ids[0]); if(c){ c.body=after; touch(); save(); } } updateWritePreview(); setTimeout(function(){$("writeMsg").textContent="";},1500); };
 function setLang(l){ active().lang=l; state.defaultLang=l; buildRules(); Array.prototype.slice.call($("langSeg").children).forEach(function(b){ b.classList.toggle("on",b.dataset.l===l); }); touch(); save(); }
 Array.prototype.slice.call($("langSeg").children).forEach(function(b){ b.onclick=function(){ setLang(b.dataset.l); }; });
 // Format-as dropdown
@@ -875,8 +887,36 @@ $("formatBtn").onclick=function(e){ e.stopPropagation(); $("formatMenu").classLi
 Array.prototype.slice.call($("formatMenu").children).forEach(function(b){ b.onclick=function(){
   var res=EC.setElementType(wta.value, wta.selectionStart, wta.selectionEnd, b.dataset.t);
   wta.value=res.value; wta.selectionStart=res.start; wta.selectionEnd=res.end; $("formatMenu").classList.remove("show");
-  if(writing&&!writing.cluster){ var c=cardById(writing.ids[0]); if(c){ c.body=wta.value; touch(); save(); } } wta.focus();
+  if(writing&&!writing.cluster){ var c=cardById(writing.ids[0]); if(c){ c.body=wta.value; touch(); save(); } } updateWritePreview(); wta.focus();
 };});
+
+// ---------- live preview in the write panel ----------
+var writeMode = (typeof window!=="undefined" && window.innerWidth>=980) ? "split" : "edit";
+function applyWriteMode(){
+  var w=$("write");
+  w.classList.toggle("mode-edit",writeMode==="edit");
+  w.classList.toggle("mode-split",writeMode==="split");
+  w.classList.toggle("mode-prev",writeMode==="prev");
+  w.classList.toggle("has-prev",writeMode!=="edit");
+  Array.prototype.slice.call($("viewWrite").children).forEach(function(b){ b.classList.toggle("on",b.dataset.m===writeMode); });
+  if(writeMode!=="edit") updateWritePreview();
+}
+Array.prototype.slice.call($("viewWrite").children).forEach(function(b){ b.onclick=function(){ writeMode=b.dataset.m; applyWriteMode(); if(writeMode!=="prev") wta.focus(); }; });
+var prevRaf=null;
+function updateWritePreview(){
+  if(writeMode==="edit" || !$("write").classList.contains("show")) return;
+  if(prevRaf) cancelAnimationFrame(prevRaf);
+  prevRaf=requestAnimationFrame(function(){
+    var parsed=FC.parseFountain(wta.value,{autodetect:true});
+    $("wprevPages").innerHTML='<div class="page">'+FC.titleHTML(parsed.title)+FC.renderHTML(parsed,{sceneNumbers:false})+'</div>';
+    fitWritePreview();
+  });
+}
+function fitWritePreview(){
+  var pp=$("wprevPages"), host=pp.parentNode; if(!pp.querySelector(".page")) return;
+  pp.style.zoom="1"; pp.style.zoom=Math.min(1,(host.clientWidth-20)/(8.5*96));
+}
+try{ window.addEventListener("resize",function(){ if($("write").classList.contains("show")&&writeMode!=="edit") fitWritePreview(); }); }catch(e){}
 
 // ---------- COMPILE / PREVIEW / EXPORT ----------
 var lastCompiled="";
